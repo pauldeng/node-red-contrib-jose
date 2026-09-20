@@ -1,32 +1,81 @@
 <script type="text/javascript">
-  RED.nodes.registerType("jose-key", {
-    category: "config",
-    defaults: {
-      name: { value: "" },
-      family: { value: "signing" },
-      source: { value: "secret" },
-    },
-    credentials: {
-      secret: { type: "password" },
-      pem: { type: "password" },
-      passphrase: { type: "password" },
-      jwk: { type: "password" },
-    },
-    label: function () {
-      return this.name || `jose key (${this.source})`;
-    },
-    oneditprepare: function () {
-      // One handler shows only the rows that belong to the selected source; typed values in hidden rows are kept.
-      const show = () => {
-        const source = $("#node-config-input-source").val();
-        $(".jose-dialog [data-source]").each(function () {
-          $(this).toggle($(this).attr("data-source").split(" ").includes(source));
-        });
-      };
-      $("#node-config-input-source").on("change", show);
-      show();
-    },
-  });
+  (function () {
+    // Closed lists; test/unit/keys.test.js asserts they match lib/keys.js.
+    const ALGS = {
+      signing: [
+        "HS256",
+        "HS384",
+        "HS512",
+        "RS256",
+        "RS384",
+        "RS512",
+        "PS256",
+        "PS384",
+        "PS512",
+        "ES256",
+        "ES384",
+        "ES512",
+        "Ed25519",
+      ],
+      encryption: ["dir", "RSA-OAEP-256", "ECDH-ES+A256KW"],
+    };
+    RED.nodes.registerType("jose-key", {
+      category: "config",
+      defaults: {
+        name: { value: "" },
+        family: { value: "signing", validate: (v) => Object.hasOwn(ALGS, v) },
+        source: { value: "secret" },
+        alg: {
+          value: "auto",
+          required: true,
+          validate: function (v) {
+            const input = $("#node-config-input-family");
+            const family = input.length ? input.val() : this.family === undefined ? "signing" : this.family;
+            return Object.hasOwn(ALGS, family) && (v === "auto" || ALGS[family].includes(v));
+          },
+        },
+        secretEncoding: { value: "base64" },
+      },
+      credentials: {
+        secret: { type: "password" },
+        pem: { type: "password" },
+        passphrase: { type: "password" },
+        jwk: { type: "password" },
+      },
+      label: function () {
+        return this.name || `jose key (${this.source}, ${this.alg === "auto" ? "auto" : this.alg})`;
+      },
+      oneditprepare: function () {
+        const saved = this.alg === undefined ? "auto" : this.alg;
+        const rebuildAlgs = (event) => {
+          const family = $("#node-config-input-family").val();
+          const current = $("#node-config-input-alg").val() || saved;
+          const options = ["auto", ...(Object.hasOwn(ALGS, family) ? ALGS[family] : [])];
+          $("#node-config-input-alg")
+            .empty()
+            .append(
+              options.map((a) =>
+                $("<option>")
+                  .val(a)
+                  .text(a === "auto" ? "auto (from the key)" : a),
+              ),
+            )
+            .val(options.includes(current) ? current : event ? "auto" : "");
+        };
+        // One handler shows only the rows that belong to the selected source; typed values in hidden rows are kept.
+        const show = () => {
+          const source = $("#node-config-input-source").val();
+          $(".jose-dialog [data-source]").each(function () {
+            $(this).toggle($(this).attr("data-source").split(" ").includes(source));
+          });
+        };
+        $("#node-config-input-family").on("change", rebuildAlgs);
+        $("#node-config-input-source").on("change", show);
+        rebuildAlgs();
+        show();
+      },
+    });
+  })();
 </script>
 
 <script type="text/html" data-template-name="jose-key">
@@ -35,6 +84,9 @@
       width: 70%;
       font-family: monospace;
       resize: vertical;
+    }
+    .jose-dialog select {
+      width: 70%;
     }
   </style>
   <div class="jose-dialog">
@@ -59,9 +111,22 @@
         <option value="remote-jwks">JSON Web Key Set (URL)</option>
       </select>
     </div>
+    <div class="form-row">
+      <label for="node-config-input-alg"><i class="fa fa-cog"></i> Algorithm</label>
+      <select id="node-config-input-alg"></select>
+    </div>
     <div class="form-row" data-source="secret">
       <label for="node-config-input-secret"><i class="fa fa-lock"></i> Secret</label>
       <input type="password" id="node-config-input-secret" autocomplete="new-password" />
+    </div>
+    <div class="form-row" data-source="secret">
+      <label for="node-config-input-secretEncoding"><i class="fa fa-code"></i> Encoding</label>
+      <select id="node-config-input-secretEncoding">
+        <option value="base64">base64 (default)</option>
+        <option value="base64url">base64url</option>
+        <option value="hex">hex</option>
+        <option value="utf8">utf8 text</option>
+      </select>
     </div>
     <div class="form-row" data-source="pem">
       <label for="node-config-input-pem"><i class="fa fa-file-text-o"></i> PEM</label>
@@ -75,6 +140,9 @@
       <label for="node-config-input-jwk"><i class="fa fa-file-code-o"></i> JWK</label>
       <textarea id="node-config-input-jwk" rows="8" autocomplete="off" spellcheck="false"></textarea>
     </div>
+    <div class="form-tips" data-source="secret pem jwk local-jwks">
+      Stored material shows as <code>__PWRD__</code>; paste to replace, clear to remove.
+    </div>
   </div>
 </script>
 
@@ -83,15 +151,19 @@
 
   ### Details
 
-  Key material is stored in Node-RED credentials, never in the exported flow. Once saved, the editor shows a placeholder instead of the stored value; paste new material to replace it. A credential may also be a whole-value environment reference such as `${JWT_SECRET}`.
+  Key material is stored in Node-RED credentials, never in the exported flow. Once saved, the editor shows `__PWRD__` instead of the stored value; paste new material to replace it or clear the field to remove it. A credential may also be a whole-value environment reference such as `${JWT_SECRET}`.
 
-  Each key configuration is used for exactly one family, signing or encryption, and binds one algorithm. The operation nodes inherit that algorithm; a token header can never choose it.
+  Each key configuration serves exactly one family, signing or encryption, and binds one algorithm. `auto` picks it from the material: a shared secret gives `HS256` for signing and `dir` with `A256GCM` for encryption. The operation nodes inherit the algorithm; a token header can never choose it.
+
+  A shared secret is decoded strictly with the selected encoding (`base64` by default, as produced by `openssl rand -base64 32`). It must be at least 32 bytes for `HS256`, 48 for `HS384`, 64 for `HS512`, and exactly 32 bytes for encryption. Length is checked, randomness is up to you.
+
+  When the material cannot be used, the configuration logs a warning at deploy time, dependent nodes show `key error`, and every message they receive fails with `KEY_UNUSABLE`.
 
   > [!NOTE]
-  > Pre-release skeleton: key material is not parsed yet.
+  > PEM, JSON Web Key and JSON Web Key Set sources are not implemented yet.
 
   ### References
 
-  - [RFC 7517 JSON Web Key](https://www.rfc-editor.org/rfc/rfc7517) - JWK and JWK Set formats
+  - [RFC 7518 section 3.2](https://www.rfc-editor.org/rfc/rfc7518#section-3.2) - minimum HMAC key sizes
   - [RFC 8725 JWT Best Current Practices](https://www.rfc-editor.org/rfc/rfc8725) - algorithm and key policy
 </script>

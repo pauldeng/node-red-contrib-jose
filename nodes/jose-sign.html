@@ -1,0 +1,231 @@
+<script type="text/javascript">
+  (function () {
+    const YEAR = 31536000;
+    const live = (node, prop) => $(`#node-input-${prop}`).val() || node[prop];
+    const isInt = (v, min, max) =>
+      (typeof v === "number" || typeof v === "string") &&
+      String(v).trim() !== "" &&
+      Number.isSafeInteger(Number(v)) &&
+      Number(v) >= min &&
+      Number(v) <= max;
+    RED.nodes.registerType("jose-sign", {
+      category: "jose",
+      color: "#a6bbcf",
+      icon: "font-awesome/fa-pencil-square-o",
+      inputs: 1,
+      outputs: 1,
+      inputLabels: "claims",
+      outputLabels: "token",
+      paletteLabel: "jose sign",
+      defaults: {
+        name: { value: "" },
+        key: { value: "", type: "jose-key" },
+        claims: { value: "payload", required: true },
+        claimsType: { value: "msg" },
+        typ: { value: "JWT" },
+        expiryMode: { value: "ttl" },
+        ttlSeconds: {
+          value: 3600,
+          validate: function (v, opt) {
+            return (
+              (live(this, "expiryMode") ?? "ttl") !== "ttl" ||
+              isInt(v, 1, YEAR) ||
+              (opt ? `1 to ${YEAR} seconds` : false)
+            );
+          },
+        },
+        expiresAt: {
+          value: "",
+          validate: function (v, opt) {
+            return (
+              live(this, "expiryMode") !== "absolute" ||
+              isInt(v, 0, Number.MAX_SAFE_INTEGER) ||
+              (opt ? "Unix time in seconds" : false)
+            );
+          },
+        },
+        issuedAt: { value: true },
+        notBeforeMode: { value: "preserve" },
+        notBeforeSeconds: {
+          value: 0,
+          validate: function (v, opt) {
+            return (
+              live(this, "notBeforeMode") !== "offset" ||
+              isInt(v, -YEAR, YEAR) ||
+              (opt ? `-${YEAR} to ${YEAR} seconds` : false)
+            );
+          },
+        },
+        notBeforeAt: {
+          value: "",
+          validate: function (v, opt) {
+            return (
+              live(this, "notBeforeMode") !== "absolute" ||
+              isInt(v, 0, Number.MAX_SAFE_INTEGER) ||
+              (opt ? "Unix time in seconds" : false)
+            );
+          },
+        },
+        tokenTo: {
+          value: "payload",
+          required: true,
+          validate: function (v) {
+            return (
+              typeof v === "string" &&
+              /^[A-Za-z_$][\w$]*(\.[A-Za-z_$][\w$]*)*$/.test(v) &&
+              !v.split(".").includes("__proto__")
+            );
+          },
+        },
+        tokenToType: { value: "msg" },
+      },
+      label: function () {
+        return this.name || "jose sign";
+      },
+      oneditprepare: function () {
+        $("#node-input-claims").typedInput({
+          default: "msg",
+          typeField: "#node-input-claimsType",
+          types: ["msg", "flow", "global", "json", "jsonata"],
+        });
+        $("#node-input-tokenTo").typedInput({ default: "msg", typeField: "#node-input-tokenToType", types: ["msg"] });
+        const show = () => {
+          const exp = $("#node-input-expiryMode").val();
+          const nbf = $("#node-input-notBeforeMode").val();
+          $(".jose-dialog [data-expiry]").each(function () {
+            $(this).toggle($(this).attr("data-expiry") === exp);
+          });
+          $(".jose-dialog [data-nbf]").each(function () {
+            $(this).toggle($(this).attr("data-nbf") === nbf);
+          });
+        };
+        $("#node-input-expiryMode, #node-input-notBeforeMode").on("change", show);
+        show();
+      },
+    });
+  })();
+</script>
+
+<script type="text/html" data-template-name="jose-sign">
+  <div class="jose-dialog">
+    <div class="form-row">
+      <label for="node-input-key"><i class="fa fa-key"></i> Key</label>
+      <input type="text" id="node-input-key" />
+    </div>
+    <div class="form-row">
+      <label for="node-input-claims"><i class="fa fa-list"></i> Claims</label>
+      <input type="text" id="node-input-claims" />
+      <input type="hidden" id="node-input-claimsType" />
+    </div>
+    <div class="form-row">
+      <label for="node-input-expiryMode"><i class="fa fa-clock-o"></i> Expiry</label>
+      <select id="node-input-expiryMode" style="width: 70%">
+        <option value="ttl">expires after a number of seconds</option>
+        <option value="absolute">expires at a Unix time</option>
+        <option value="preserve">keep the exp claim as given</option>
+        <option value="omit">no expiry</option>
+      </select>
+    </div>
+    <div class="form-row" data-expiry="ttl">
+      <label for="node-input-ttlSeconds">Seconds</label>
+      <input
+        type="number"
+        id="node-input-ttlSeconds"
+        min="1"
+        max="31536000"
+        step="1"
+        placeholder="3600"
+        style="width: 70%"
+      />
+    </div>
+    <div class="form-row" data-expiry="absolute">
+      <label for="node-input-expiresAt">Unix time</label>
+      <input
+        type="number"
+        id="node-input-expiresAt"
+        min="0"
+        step="1"
+        placeholder="seconds since 1970"
+        style="width: 70%"
+      />
+    </div>
+    <div class="form-row">
+      <label for="node-input-notBeforeMode"><i class="fa fa-hourglass-start"></i> Not before</label>
+      <select id="node-input-notBeforeMode" style="width: 70%">
+        <option value="preserve">keep the nbf claim as given</option>
+        <option value="offset">now plus an offset in seconds</option>
+        <option value="absolute">at a Unix time</option>
+        <option value="omit">no not-before</option>
+      </select>
+    </div>
+    <div class="form-row" data-nbf="offset">
+      <label for="node-input-notBeforeSeconds">Offset</label>
+      <input
+        type="number"
+        id="node-input-notBeforeSeconds"
+        min="-31536000"
+        max="31536000"
+        step="1"
+        placeholder="0"
+        style="width: 70%"
+      />
+    </div>
+    <div class="form-row" data-nbf="absolute">
+      <label for="node-input-notBeforeAt">Unix time</label>
+      <input
+        type="number"
+        id="node-input-notBeforeAt"
+        min="0"
+        step="1"
+        placeholder="seconds since 1970"
+        style="width: 70%"
+      />
+    </div>
+    <div class="form-row">
+      <label for="node-input-issuedAt"><i class="fa fa-calendar-o"></i> Issued at</label>
+      <input type="checkbox" id="node-input-issuedAt" style="width: auto; vertical-align: top" />
+      <span>set <code>iat</code> to now</span>
+    </div>
+    <div class="form-row">
+      <label for="node-input-typ"><i class="fa fa-tag"></i> Type</label>
+      <input type="text" id="node-input-typ" placeholder="JWT" style="width: 70%" />
+    </div>
+    <div class="form-row">
+      <label for="node-input-tokenTo"><i class="fa fa-sign-out"></i> Token to</label>
+      <input type="text" id="node-input-tokenTo" />
+      <input type="hidden" id="node-input-tokenToType" />
+    </div>
+    <div class="form-row">
+      <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+      <input type="text" id="node-input-name" placeholder="Name" />
+    </div>
+  </div>
+</script>
+
+<script type="text/markdown" data-help-name="jose-sign">
+  Signs a claims object into a compact JSON Web Token using the algorithm bound to the selected key.
+
+  ### Inputs
+
+  : payload (object) : The claims to sign, by default. Any message, flow or global property, a JSON literal or a JSONata expression can be selected instead. It must be a plain JSON object.
+
+  ### Outputs
+
+  : payload (string) : The signed token, by default. Another message property can be selected; the rest of the message is preserved.
+
+  ### Details
+
+  The key configuration decides the algorithm (`HS256` for a shared secret unless set otherwise); the token header carries `alg` and, unless _Type_ is blank, `typ` (`JWT` by default).
+
+  Expiry has four modes. _Expires after_ sets `exp` to now plus a number of seconds (default 3600). _Expires at_ sets an absolute Unix time in seconds. _Keep claim exp_ leaves whatever `exp` the claims already carry. _No expiry_ removes `exp`. _Not before_ works the same way for `nbf` and keeps the incoming claim by default. _Issued at_ sets `iat` to now unless unticked, in which case an incoming `iat` is kept. Active modes override the matching claim in the input; the input object itself is never modified.
+
+  Failures are reported through `done(error)`, so a Catch node receives them with `msg.error.code`: `NO_KEY_CONFIG`, `KEY_UNUSABLE`, `INVALID_CLAIMS`, `INVALID_INPUT`, `OUTPUT_INVALID`, `NODE_CLOSING`.
+
+  > [!WARNING]
+  > Signing proves who issued the token, not who asked for it. Check that the flow feeding this node is allowed to mint those claims. Signed claims are readable by anyone holding the token; use encryption for confidentiality.
+
+  ### References
+
+  - [RFC 7519 JSON Web Token](https://www.rfc-editor.org/rfc/rfc7519) - registered claims and time semantics
+  - [RFC 8725 JWT Best Current Practices](https://www.rfc-editor.org/rfc/rfc8725) - issuing tokens safely
+</script>

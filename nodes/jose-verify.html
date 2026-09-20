@@ -1,0 +1,117 @@
+<script type="text/javascript">
+  RED.nodes.registerType("jose-verify", {
+    category: "jose",
+    color: "#a6bbcf",
+    icon: "font-awesome/fa-check-square-o",
+    inputs: 1,
+    outputs: 2,
+    inputLabels: "token",
+    outputLabels: ["verified", "rejected"],
+    paletteLabel: "jose verify",
+    defaults: {
+      name: { value: "" },
+      key: { value: "", type: "jose-key" },
+      tokenFrom: { value: "payload", required: true },
+      tokenFromType: { value: "msg" },
+      stripBearer: { value: true },
+      typ: { value: "JWT" },
+      requiredClaims: { value: "exp" },
+      claimsTo: {
+        value: "payload",
+        required: true,
+        validate: function (v) {
+          return (
+            typeof v === "string" &&
+            /^[A-Za-z_$][\w$]*(\.[A-Za-z_$][\w$]*)*$/.test(v) &&
+            !v.split(".").includes("__proto__")
+          );
+        },
+      },
+      claimsToType: { value: "msg" },
+      failureMode: { value: "catch" },
+    },
+    label: function () {
+      return this.name || "jose verify";
+    },
+    oneditprepare: function () {
+      $("#node-input-tokenFrom").typedInput({
+        default: "msg",
+        typeField: "#node-input-tokenFromType",
+        types: ["msg", "flow", "global", "jsonata"],
+      });
+      $("#node-input-claimsTo").typedInput({ default: "msg", typeField: "#node-input-claimsToType", types: ["msg"] });
+    },
+  });
+</script>
+
+<script type="text/html" data-template-name="jose-verify">
+  <div class="jose-dialog">
+    <div class="form-row">
+      <label for="node-input-key"><i class="fa fa-key"></i> Key</label>
+      <input type="text" id="node-input-key" />
+    </div>
+    <div class="form-row">
+      <label for="node-input-tokenFrom"><i class="fa fa-sign-in"></i> Token from</label>
+      <input type="text" id="node-input-tokenFrom" />
+      <input type="hidden" id="node-input-tokenFromType" />
+    </div>
+    <div class="form-row">
+      <label for="node-input-stripBearer"><i class="fa fa-scissors"></i> Bearer</label>
+      <input type="checkbox" id="node-input-stripBearer" style="width: auto; vertical-align: top" />
+      <span>strip a leading <code>Bearer</code></span>
+    </div>
+    <div class="form-row">
+      <label for="node-input-typ"><i class="fa fa-tag"></i> Type</label>
+      <input type="text" id="node-input-typ" placeholder="JWT" style="width: 70%" />
+    </div>
+    <div class="form-row">
+      <label for="node-input-requiredClaims"><i class="fa fa-check"></i> Required</label>
+      <input type="text" id="node-input-requiredClaims" placeholder="exp" style="width: 70%" />
+    </div>
+    <div class="form-row">
+      <label for="node-input-claimsTo"><i class="fa fa-sign-out"></i> Claims to</label>
+      <input type="text" id="node-input-claimsTo" />
+      <input type="hidden" id="node-input-claimsToType" />
+    </div>
+    <div class="form-row">
+      <label for="node-input-failureMode"><i class="fa fa-random"></i> On rejection</label>
+      <select id="node-input-failureMode" style="width: 70%">
+        <option value="catch">throw an error (Catch node)</option>
+        <option value="output">send to the second output</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+      <input type="text" id="node-input-name" placeholder="Name" />
+    </div>
+  </div>
+</script>
+
+<script type="text/markdown" data-help-name="jose-verify">
+  Verifies a compact JSON Web Token against the selected key and its bound algorithm, then outputs the claims.
+
+  ### Inputs
+
+  : payload (string) : The token, by default. Any message, flow or global property or a JSONata expression can be selected, for example `req.headers.authorization`. A leading `Bearer` scheme is removed when _Bearer_ is ticked.
+
+  ### Outputs
+
+  1. Verified
+     : payload (object) : The validated claims, by default; another message property can be selected.
+  2. Rejected
+     : error (object) : `{ code, message, claim, reason }` when _On rejection_ sends rejected tokens here instead of throwing.
+
+  ### Details
+
+  Only the algorithm bound to the key configuration is accepted; a token with any other `alg` fails with `ERR_JOSE_ALG_NOT_ALLOWED`. The `typ` header must equal _Type_ unless it is blank. _Required_ lists claims that must be present, `exp` by default; clear it to accept tokens without an expiry.
+
+  Token rejections (`NO_TOKEN`, `INPUT_TOO_LARGE`, `ERR_JWT_EXPIRED`, `ERR_JWT_CLAIM_VALIDATION_FAILED`, `ERR_JWS_SIGNATURE_VERIFICATION_FAILED`, `ERR_JWS_INVALID`, `ERR_JOSE_ALG_NOT_ALLOWED` and the other codes listed in the troubleshooting guide) either throw to a Catch node or, with _On rejection_ set to the second output, leave with `msg.error` set. Configuration and key failures (`NO_KEY_CONFIG`, `KEY_UNUSABLE`, `INVALID_INPUT`, `OUTPUT_INVALID`, `NODE_CLOSING`) always throw. Errors never carry the token, its claims or any original error text.
+
+  > [!WARNING]
+  > A verified token proves who issued it and that it has not been altered. Whether the caller may do what it asks is a separate decision for your flow.
+
+  ### References
+
+  - [RFC 7519 JSON Web Token](https://www.rfc-editor.org/rfc/rfc7519) - claims validation
+  - [RFC 8725 JWT Best Current Practices](https://www.rfc-editor.org/rfc/rfc8725) - verification policy
+</script>

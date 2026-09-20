@@ -6,11 +6,13 @@ All notable changes to this project are documented here. Format: Keep a Changelo
 
 ### Added
 
-- Package skeleton: metadata, lint/format/check gates, real Node-RED test harness, package contract test, CI.
-- `jose-key` configuration node stub with password-type credentials (`secret`, `pem`, `passphrase`, `jwk`); no key material is parsed yet.
+- `jose-key` configuration node: one key per family (signing or encryption) with one bound algorithm. Shared-secret source with strict canonical decoding (`base64` default, `base64url`, `hex`, `utf8`), RFC 7518 minimum lengths and `auto` algorithm selection. All key material lives in password-type credentials; `${ENV}` references are honoured.
+- `jose-sign`: signs a plain claims object into a compact JWT with the key's algorithm. Expiry modes (TTL, absolute, keep, omit), not-before modes, `iat`, `typ`, configurable output property.
+- `jose-verify`: verifies a compact JWT against the key's algorithm only. Optional `Bearer` stripping, expected `typ`, required claims (`exp` by default), configurable output property, and a choice between throwing to Catch or routing token rejections to a second output with `msg.error = { code, message, claim, reason }`.
+- Stable error codes with package-owned messages, documented in `docs/TROUBLESHOOTING.md`; jose error causes and payloads are never forwarded.
+- Example `01-sign-and-verify-hs256`.
+- Package skeleton: lint/format/check gates, real Node-RED test harness, package contract test, CI matrix including the Node 24.0 floor line.
 
-### Fixed
+### Security
 
-- Enforce the CI Node floor independently of the deferred release workflow, and require lockfile dependency parity.
-- Remove credential-metadata probe logging from the shipped node; test exact PEM/JWK credential replacement, retention, cancellation and clearing through the real runtime/editor.
-- Override development-only Express 4.22.2 with 4.22.3 to resolve the transitive `qs` advisories; remove the override when Node-RED updates its pin.
+- Development tree only: Express 4.22.2 is overridden to 4.22.3 to clear transitive `qs` advisories until Node-RED updates its pin.

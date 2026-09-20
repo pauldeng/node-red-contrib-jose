@@ -28,7 +28,9 @@
   "node-red": {
     "version": ">=5.0.0",
     "nodes": {
-      "jose-key": "nodes/jose-key.js"
+      "jose-key": "nodes/jose-key.js",
+      "jose-sign": "nodes/jose-sign.js",
+      "jose-verify": "nodes/jose-verify.js"
     }
   },
   "files": [
@@ -43,11 +45,12 @@
     "test": "npm run check && node --test --test-concurrency=1 \"test/**/*.test.js\"",
     "test:runtime": "node --test --test-concurrency=1 \"test/runtime/*.test.js\"",
     "test:e2e": "playwright test",
-    "check": "node scripts/check-package.mjs && node scripts/check-editor-contract.mjs && node scripts/check-async-style.mjs nodes test",
+    "check": "node scripts/check-package.mjs && node scripts/check-editor-contract.mjs && node scripts/check-async-style.mjs nodes lib test",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check:release": "node scripts/check-package.mjs --release"
+    "check:release": "node scripts/check-package.mjs --release",
+    "test:unit": "node --test \"test/unit/*.test.js\""
   },
   "dependencies": {
     "jose": "6.2.12"
