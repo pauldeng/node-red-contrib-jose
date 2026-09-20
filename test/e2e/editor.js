@@ -17,7 +17,13 @@ const settled = (page) =>
   );
 
 async function gotoEditor(page, nr, theme = "light") {
-  await page.addInitScript((t) => localStorage.setItem("view-dark-theme", t), theme);
+  await page.addInitScript(
+    ({ theme, token }) => {
+      localStorage.setItem("view-dark-theme", theme);
+      localStorage.setItem("auth-tokens", JSON.stringify({ access_token: token }));
+    },
+    { theme, token: nr.adminToken },
+  );
   await page.goto(nr.base + "/");
   await page.waitForFunction(
     () =>

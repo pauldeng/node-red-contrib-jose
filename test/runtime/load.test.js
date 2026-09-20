@@ -3,6 +3,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
+const { once } = require("node:events");
 const { startNodeRed } = require("../helpers/node-red");
 const credentials = require("../helpers/credentials");
 
@@ -28,4 +29,39 @@ test("jose-key registers, jose loads, and a multi-line password credential reach
   const flows = JSON.stringify(await nr.api("GET", "/flows"));
   assert.ok(!flows.includes("AAAA"), "credential text must not appear in the flow export");
   assert.doesNotMatch(nr.lines.join("\n"), /AAAA|BBBB|pem credential:|jose loaded with/);
+});
+
+test("test admin API rejects anonymous and incorrect-token clients", async (t) => {
+  const nr = await startNodeRed({ packageDir: PKG });
+  t.after(() => nr.stop());
+  for (const headers of [{}, { authorization: "Bearer incorrect" }]) {
+    for (const method of ["GET", "POST"]) {
+      const res = await fetch(nr.base + "/flows", {
+        method,
+        headers: { "content-type": "application/json", ...headers },
+        ...(method === "POST" ? { body: "[]" } : {}),
+        signal: AbortSignal.timeout(5000),
+      });
+      assert.equal(res.status, 401, `${method} /flows requires the per-run admin token`);
+      await res.text();
+    }
+  }
+  assert.ok(Array.isArray(await nr.api("GET", "/flows")), "authenticated client still works");
+});
+
+test("test comms rejects unauthenticated and wrong-token subscriptions", async (t) => {
+  const nr = await startNodeRed({ packageDir: PKG });
+  t.after(() => nr.stop());
+  for (const packet of [{ subscribe: "debug" }, { auth: "incorrect" }]) {
+    const ws = new WebSocket(`ws://127.0.0.1:${nr.port}/comms`);
+    try {
+      await once(ws, "open", { signal: AbortSignal.timeout(5000) });
+      const response = once(ws, "message", { signal: AbortSignal.timeout(5000) });
+      ws.send(JSON.stringify(packet));
+      const [event] = await response;
+      assert.deepEqual(JSON.parse(event.data), { auth: "fail" });
+    } finally {
+      ws.close();
+    }
+  }
 });

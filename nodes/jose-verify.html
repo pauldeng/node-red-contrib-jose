@@ -88,8 +88,8 @@
           const input = $("#node-input-claimsTo");
           const claimsTo = input.length ? input.val() : this.claimsTo === undefined ? "payload" : this.claimsTo;
           if (typeof claimsTo !== "string") return false;
-          const a = claimsTo.split("."),
-            b = v.split(".");
+          const a = claimsTo.replace(/^msg\./, "").split("."),
+            b = v.replace(/^msg\./, "").split(".");
           const n = Math.min(a.length, b.length);
           for (let i = 0; i < n; i++) if (a[i] !== b[i]) return true;
           return false;
@@ -102,6 +102,11 @@
       return this.name || "jose verify";
     },
     oneditprepare: function () {
+      // Imported nodes may omit optional fields: show the runtime defaults instead of blank controls.
+      const defaults = { typ: "JWT", requiredClaims: "exp", clockTolerance: 0, failureMode: "catch" };
+      for (const [name, value] of Object.entries(defaults))
+        if (this[name] === undefined) $(`#node-input-${name}`).val(value);
+      if (this.stripBearer === undefined) $("#node-input-stripBearer").prop("checked", true);
       $("#node-input-tokenFrom").typedInput({
         default: "msg",
         typeField: "#node-input-tokenFromType",
@@ -211,6 +216,8 @@
      : error (object) : `{ code, message, claim, reason }` when _On rejection_ sends rejected tokens here instead of throwing.
 
   ### Details
+
+  Output paths may start with `msg.`: `msg.result` and `result` name the same destination. Overlap and writability checks use that destination.
 
   Only the algorithms bound to the key configuration are accepted (one algorithm for a single key, the configured list for a JSON Web Key Set); a token with any other `alg` fails with `ERR_JOSE_ALG_NOT_ALLOWED`. The `typ` header must equal _Type_ (`JWT` by default) unless _Type_ is blank, which disables the check. _Required_ is a comma-separated list of claims that must be present, `exp` by default; clear it to accept tokens without an expiry. _Issuer_ and _Audience_ are comma-separated lists of accepted values; _Subject_ is one required value; blank disables each check. _Tolerance_ allows up to 300 seconds of clock skew on `exp`, `nbf` and `iat`; _Max age_ rejects tokens whose `iat` is older than the given seconds. _Header to_ optionally stores the protected header (`alg`, `typ`, `kid`) in another message property after validation succeeds.
 

@@ -237,3 +237,25 @@ test("consumer policy preserves exact subjects and permits the documented max-ag
   assert.equal(consumeOptions({ subject: " alice " }).subject, " alice ");
   assert.equal(consumeOptions({ maxTokenAge: 31536001 }).maxTokenAge, 31536001);
 });
+
+test("canonical output paths preserve one optional msg prefix and check the actual destination", () => {
+  for (const [path, expected] of [
+    ["result", ["result"]],
+    ["msg.result", ["result"]],
+    ["msg.msg.result", ["msg", "result"]],
+    ["msg", ["msg"]],
+  ]) {
+    const segments = parsePath(path, "tokenTo");
+    assert.deepEqual(segments, expected);
+    const msg = {};
+    writeOutputs({ util }, msg, [[segments, "value"]]);
+    assert.equal(util.getObjectProperty(msg, expected.join(".")), "value");
+  }
+  for (const payload of ["scalar", Object.freeze({}), Object.seal({})]) {
+    const msg = { payload };
+    assert.throws(() => writeOutputs({ util }, msg, [[parsePath("msg.payload.claims", "claimsTo"), {}]]), {
+      code: "OUTPUT_INVALID",
+    });
+    assert.deepEqual(msg, { payload });
+  }
+});

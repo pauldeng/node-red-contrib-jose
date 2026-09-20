@@ -52,7 +52,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check:release": "node scripts/check-package.mjs --release",
-    "test:unit": "node --test \"test/unit/*.test.js\""
+    "test:unit": "node --test \"test/unit/*.test.js\"",
+    "bench": "node --test --test-concurrency=1 \"bench/*.test.js\"",
+    "check:install": "node scripts/clean-install.mjs"
   },
   "dependencies": {
     "jose": "6.2.12"

@@ -426,3 +426,38 @@ test("verify: close while a remote key lookup is pending settles once with NODE_
   assert.equal(done.length, 1, "the late rejection is ignored");
   assert.deepEqual(logs, []);
 });
+
+for (const type of ["verify", "decrypt"]) {
+  test(`${type}: prefixed destinations cannot expose claims through failed output writes`, async () => {
+    const jose = require("jose");
+    const state = states[FAMILY[type]];
+    const claims = { sub: "private-marker" };
+    const token =
+      type === "verify"
+        ? await new jose.SignJWT(claims)
+            .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+            .setExpirationTime("1h")
+            .sign(keyFor(state, "sign"))
+        : await new jose.EncryptJWT(claims)
+            .setProtectedHeader({ alg: "dir", enc: "A256GCM", typ: "JWT" })
+            .setExpirationTime("1h")
+            .encrypt(keyFor(state, "encrypt"));
+    for (const config of [
+      { claimsTo: "msg.result", headerTo: "result.sub.header" },
+      { claimsTo: "result", headerTo: "msg.result.sub.header" },
+      { claimsTo: "msg.msg.result", headerTo: "msg.msg.result.sub.header" },
+    ]) {
+      const { handlers } = operation(type, config);
+      const msg = { payload: token };
+      const done = [];
+      await handlers.input(
+        msg,
+        () => assert.fail("invalid outputs sent"),
+        (err) => done.push(err),
+      );
+      assert.equal(done.length, 1);
+      assert.ok(["INVALID_INPUT", "OUTPUT_INVALID"].includes(done[0]?.code));
+      assert.deepEqual(msg, { payload: token }, "failed output must retain ciphertext/input only");
+    }
+  });
+}

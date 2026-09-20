@@ -345,6 +345,9 @@ test("expired JWE Catch and unwritable output retain ciphertext only", async () 
   for (const [token, options, code] of [
     [expired, {}, "ERR_JWT_EXPIRED"],
     [await jwe(), { claimsTo: "payload.claims", failureMode: "output" }, "OUTPUT_INVALID"],
+    [await jwe(), { claimsTo: "msg.payload.claims", failureMode: "output" }, "OUTPUT_INVALID"],
+    [await jwe(), { claimsTo: "msg.result", headerTo: "result.sub.header" }, "INVALID_INPUT"],
+    [await jwe(), { claimsTo: "result", headerTo: "msg.result.sub.header", failureMode: "output" }, "INVALID_INPUT"],
   ]) {
     const id = ids();
     const msg = await run(id, decryptOnly(id, token, options), id.caught);

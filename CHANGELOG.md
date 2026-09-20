@@ -10,9 +10,10 @@ All notable changes to this project are documented here. Format: Keep a Changelo
 - `jose-sign`: signs a plain claims object into a compact JWT with the key's algorithm. Expiry modes (TTL, absolute, keep, omit), not-before modes, `iat`, `typ`, issuer, subject, audience and JWT ID setters (literal, message, context, environment, JSON array or random UUID), `kid` header, configurable output property.
 - `jose-verify`: verifies a compact JWT against the key's algorithm only. Optional `Bearer` stripping, expected `typ`, required claims (`exp` by default), optional static issuer, audience and subject policy, clock tolerance, maximum token age, configurable claims and header output properties, and a choice between throwing to Catch or routing token rejections to a second output with `msg.error = { code, message, claim, reason }`.
 - `jose-encrypt` and `jose-decrypt`: encrypted JWTs (compact JWE) with a 32-byte shared secret, `dir` key management and `A256GCM` content encryption. Same claims, time modes, `typ`, required claims, audience policy and rejection routing as the signing nodes; claims objects created in Function nodes are accepted; a failed decryption or claim check never reveals the decrypted claims.
-- Stable error codes with package-owned messages, documented in `docs/TROUBLESHOOTING.md`; jose error causes and payloads are never forwarded.
+- Stable error codes with package-owned messages, documented in `docs/TROUBLESHOOTING.md`; jose error causes and payloads are never forwarded. Output destinations are canonicalised and preflighted together before any write, so a failed write never leaves partial output behind.
 - Examples `01-sign-and-verify-hs256`, `02-encrypt-and-decrypt`, `03-rs256-pem-key`, `04-verify-with-remote-jwks` and `05-http-bearer-auth`.
 - Package skeleton: lint/format/check gates, real Node-RED test harness, package contract test, CI matrix including the Node 24.0 floor line.
+- Qualification tooling: `npm run bench` measures raw jose against deployed flows and a burst against a stalled JWKS endpoint; `npm run check:install` installs the packed tarball into a clean Node-RED 5 in Docker and round-trips example 01. `SECURITY.md` states the guarantees and their limits.
 
 ### Security
 

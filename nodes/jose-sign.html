@@ -28,6 +28,7 @@
           value: 3600,
           validate: function (v, opt) {
             return (
+              v === undefined ||
               (live(this, "expiryMode") ?? "ttl") !== "ttl" ||
               isInt(v, 1, YEAR) ||
               (opt ? `1 to ${YEAR} seconds` : false)
@@ -50,6 +51,7 @@
           value: 0,
           validate: function (v, opt) {
             return (
+              v === undefined ||
               live(this, "notBeforeMode") !== "offset" ||
               isInt(v, -YEAR, YEAR) ||
               (opt ? `-${YEAR} to ${YEAR} seconds` : false)
@@ -93,6 +95,18 @@
         return this.name || "jose sign";
       },
       oneditprepare: function () {
+        // Imported nodes may omit optional fields: show the runtime default instead of a blank control,
+        // otherwise the dialog misrepresents behaviour and saving would persist an empty, invalid value.
+        const defaults = {
+          expiryMode: "ttl",
+          ttlSeconds: 3600,
+          notBeforeMode: "preserve",
+          notBeforeSeconds: 0,
+          typ: "JWT",
+        };
+        for (const [name, value] of Object.entries(defaults))
+          if (this[name] === undefined) $(`#node-input-${name}`).val(value);
+        if (this.issuedAt === undefined) $("#node-input-issuedAt").prop("checked", true);
         $("#node-input-claims").typedInput({
           default: "msg",
           typeField: "#node-input-claimsType",
@@ -262,6 +276,8 @@
   : payload (string) : The signed token, by default. Another message property can be selected; the rest of the message is preserved.
 
   ### Details
+
+  Output paths may start with `msg.`: `msg.result` and `result` name the same destination. Overlap and writability checks use that destination.
 
   The key configuration decides the algorithm (`HS256` for a shared secret unless set otherwise); the token header carries `alg` and, unless _Type_ is blank, `typ` (`JWT` by default).
 

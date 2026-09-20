@@ -1,6 +1,7 @@
 "use strict";
 // Real Node-RED child with temporary storage and an OS-assigned port (no probe/bind race).
 // Register comms waiters BEFORE deploy/inject; they do not replay prior debug messages.
+const { randomBytes } = require("node:crypto");
 const { spawn } = require("node:child_process");
 const { once } = require("node:events");
 const { createInterface } = require("node:readline");
@@ -11,6 +12,7 @@ const path = require("node:path");
 async function startNodeRed({ packageDir, settings = {}, timeoutMs = 30_000, log = false } = {}) {
   if (!packageDir) throw new Error("packageDir is required");
   const userDir = await mkdtemp(path.join(os.tmpdir(), "nr-test-"));
+  const adminToken = randomBytes(32).toString("hex");
   const lines = [];
   const lineWaiters = new Set();
   const commsWaiters = new Set();
@@ -71,6 +73,12 @@ async function startNodeRed({ packageDir, settings = {}, timeoutMs = 30_000, log
         telemetry: { enabled: false },
         logging: { console: { level: "info", metrics: false, audit: false } },
         ...settings,
+        // Per-run bearer token: loopback does not isolate unrelated local OS users.
+        adminAuth: {
+          type: "credentials",
+          users: [{ username: "test-runner", permissions: "*" }],
+          tokens: [{ token: adminToken, user: "test-runner", scope: "*" }],
+        },
       })};\n`,
     );
     child = spawn(process.execPath, [require.resolve("node-red/red.js"), "-u", userDir, "-s", settingsFile], {
@@ -99,7 +107,7 @@ async function startNodeRed({ packageDir, settings = {}, timeoutMs = 30_000, log
     const api = async (method, route, body, headers = {}) => {
       const res = await fetch(base + route, {
         method,
-        headers: { "content-type": "application/json", ...headers },
+        headers: { "content-type": "application/json", authorization: `Bearer ${adminToken}`, ...headers },
         body: body === undefined ? undefined : JSON.stringify(body),
         signal: AbortSignal.timeout(timeoutMs),
       });
@@ -115,8 +123,14 @@ async function startNodeRed({ packageDir, settings = {}, timeoutMs = 30_000, log
     const inject = (id) => api("POST", `/inject/${id}`);
     ws = new WebSocket(`ws://127.0.0.1:${port}/comms`);
     await once(ws, "open", { signal: AbortSignal.timeout(timeoutMs) });
+    const authenticated = once(ws, "message", { signal: AbortSignal.timeout(timeoutMs) });
+    ws.send(JSON.stringify({ auth: adminToken }));
+    const [auth] = await authenticated;
+    if (JSON.parse(auth.data).auth !== "ok") throw new Error("Node-RED comms authentication failed");
     ws.addEventListener("message", (ev) => {
-      for (const { topic, data } of JSON.parse(ev.data)) {
+      const packet = JSON.parse(ev.data);
+      if (!Array.isArray(packet)) return; // session/auth notifications are not topic packets
+      for (const { topic, data } of packet) {
         for (const w of commsWaiters) if (w.match(topic, data)) w.resolve(data);
       }
     });
@@ -141,6 +155,7 @@ async function startNodeRed({ packageDir, settings = {}, timeoutMs = 30_000, log
     return {
       port,
       base,
+      adminToken,
       userDir,
       child,
       lines,

@@ -32,3 +32,5 @@ Every error leaving a jose node is a fresh `Error` with one of these codes. Catc
 When `OUTPUT_INVALID` reports shared-object overlap, choose destinations that do not alias each other. For example, if `msg.a` and `msg.b` refer to the same object, `a.result` and `b.result.header` overlap even though their path strings differ. Claims and headers are left unwritten.
 
 For remote JWKS, a timeout before response headers is `ERR_JWKS_TIMEOUT`; a body that stalls after 200 headers is `JWKS_FETCH`. Malformed matching key material is `ERR_JWKS_INVALID`, not a network failure. Keys without `alg` are ineligible when multiple algorithms are configured. A consumer-only redeploy retains the shared cache; a changed key configuration or full deploy creates a fresh one.
+
+Output paths normalize one optional leading `msg.` before validation and writing: `msg.result` and `result` overlap. `msg.msg.result` names the literal nested `msg.result` property. Equal or nested claims/header destinations fail with `INVALID_INPUT` before crypto output is attached.

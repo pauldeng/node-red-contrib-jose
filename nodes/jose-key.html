@@ -120,6 +120,16 @@
         return this.name || `jose key (${this.source}, ${this.alg === "auto" ? "auto" : this.alg})`;
       },
       oneditprepare: function () {
+        // Imported nodes may omit optional fields: show the runtime defaults instead of blank controls.
+        const defaults = {
+          family: "signing",
+          source: "secret",
+          secretEncoding: "base64",
+          cacheSeconds: 600,
+          timeoutSeconds: 5,
+        };
+        for (const [name, value] of Object.entries(defaults))
+          if (this[name] === undefined) $(`#node-config-input-${name}`).val(value);
         const saved = this.alg === undefined ? "auto" : this.alg;
         const rebuildAlgs = (event) => {
           const family = $("#node-config-input-family").val();
@@ -267,7 +277,7 @@
 
   Key material is stored in Node-RED credentials, never in the exported flow. Once saved, the editor shows `__PWRD__` instead of the stored value; paste new material to replace it or clear the field to remove it. A credential may also be a whole-value environment reference such as `${JWT_SECRET}`.
 
-  Each key configuration serves exactly one family, signing or encryption, and binds one algorithm. `auto` picks it from the material: a shared secret gives `HS256` for signing and `dir` with `A256GCM` for encryption. The operation nodes inherit the algorithm; a token header can never choose it.
+  Each key configuration serves exactly one family, signing or encryption. Single-key sources bind one algorithm; JWKS sources bind an explicit asymmetric algorithm allowlist. `auto` picks it from the material: a shared secret gives `HS256` for signing and `dir` with `A256GCM` for encryption. Operation nodes inherit this policy; token headers cannot widen it.
 
   A shared secret is decoded strictly with the selected encoding (`base64` by default, as produced by `openssl rand -base64 32`). It must be at least 32 bytes for `HS256`, 48 for `HS384`, 64 for `HS512`, and exactly 32 bytes for encryption. Length is checked, randomness is up to you.
 
