@@ -3,12 +3,12 @@ const jose = require("jose");
 const { attach, producerSetup, produce } = require("../lib/operation");
 
 module.exports = function (RED) {
-  function JoseSignNode(config) {
+  function JoseEncryptNode(config) {
     RED.nodes.createNode(this, config);
     attach(RED, this, RED.nodes.getNode(config.key), {
       kind: "produce",
-      purpose: "sign",
-      family: "signing",
+      purpose: "encrypt",
+      family: "encryption",
       setup: () =>
         producerSetup({
           claims: config.claims,
@@ -25,8 +25,8 @@ module.exports = function (RED) {
           tokenToType: config.tokenToType,
         }),
       run: (ctx) =>
-        produce(ctx, { create: (claims) => new jose.SignJWT(claims), finalize: (jwt, key) => jwt.sign(key) }),
+        produce(ctx, { create: (claims) => new jose.EncryptJWT(claims), finalize: (jwt, key) => jwt.encrypt(key) }),
     });
   }
-  RED.nodes.registerType("jose-sign", JoseSignNode);
+  RED.nodes.registerType("jose-encrypt", JoseEncryptNode);
 };

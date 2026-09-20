@@ -34,6 +34,15 @@ const SCENARIOS = {
       assert.equal(msg.payload.exp - msg.payload.iat, 3600);
     },
   },
+  "02-encrypt-and-decrypt.json": {
+    inject: "jose_ex2_inject",
+    debug: "jose_ex2_claims",
+    check: (msg) => {
+      assert.equal(msg.payload.sub, "alice");
+      assert.equal(msg.payload.aud, "example-service");
+      assert.equal(msg.payload.exp - msg.payload.iat, 3600);
+    },
+  },
 };
 
 const files = fs.readdirSync(path.join(PKG, "examples")).filter((f) => f.endsWith(".json"));

@@ -30,7 +30,9 @@
     "nodes": {
       "jose-key": "nodes/jose-key.js",
       "jose-sign": "nodes/jose-sign.js",
-      "jose-verify": "nodes/jose-verify.js"
+      "jose-verify": "nodes/jose-verify.js",
+      "jose-encrypt": "nodes/jose-encrypt.js",
+      "jose-decrypt": "nodes/jose-decrypt.js"
     }
   },
   "files": [

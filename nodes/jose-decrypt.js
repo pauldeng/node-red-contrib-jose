@@ -3,12 +3,12 @@ const jose = require("jose");
 const { attach, consumerSetup, consume } = require("../lib/operation");
 
 module.exports = function (RED) {
-  function JoseVerifyNode(config) {
+  function JoseDecryptNode(config) {
     RED.nodes.createNode(this, config);
     attach(RED, this, RED.nodes.getNode(config.key), {
       kind: "consume",
-      purpose: "verify",
-      family: "signing",
+      purpose: "decrypt",
+      family: "encryption",
       setup: () =>
         consumerSetup(
           {
@@ -22,13 +22,17 @@ module.exports = function (RED) {
             claimsToType: config.claimsToType,
             failureMode: config.failureMode,
           },
-          { stripBearer: true },
+          { stripBearer: false },
         ),
       run: (ctx) =>
         consume(ctx, (token, key, state, options) =>
-          jose.jwtVerify(token, key, { ...options, algorithms: [state.alg] }),
+          jose.jwtDecrypt(token, key, {
+            ...options,
+            keyManagementAlgorithms: [state.alg],
+            contentEncryptionAlgorithms: [state.enc],
+          }),
         ),
     });
   }
-  RED.nodes.registerType("jose-verify", JoseVerifyNode);
+  RED.nodes.registerType("jose-decrypt", JoseDecryptNode);
 };

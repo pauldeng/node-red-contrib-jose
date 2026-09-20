@@ -392,3 +392,20 @@ test("explicit null input policy is a configuration error even in rejection-outp
   const msg = await run(id, verifyOnly(id, await token(), { stripBearer: null, failureMode: "output" }), id.caught);
   assert.equal(msg.error.code, "INVALID_INPUT");
 });
+
+test("verify enforces static audience policy", async () => {
+  for (const [aud, expected] of [
+    ["other", "ERR_JWT_CLAIM_VALIDATION_FAILED"],
+    ["service", undefined],
+  ]) {
+    const id = ids();
+    const flow = verifyOnly(id, await token("HS256", { sub: "alice", aud }), {
+      audience: "service",
+      failureMode: "output",
+    });
+    flow.find((n) => n.id === id.verify).wires = [[id.result], [id.result]];
+    flow.push(debug(id, "result"));
+    const msg = await run(id, flow, id.result);
+    assert.equal(msg.error?.code, expected);
+  }
+});

@@ -4,9 +4,19 @@ const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const { util } = require("@node-red/util");
 const { loadMaterial, keyFor } = require("../../lib/keys");
-const state = loadMaterial({ source: "secret" }, { secret: crypto.randomBytes(32).toString("base64") });
+const states = {
+  signing: loadMaterial({ source: "secret" }, { secret: crypto.randomBytes(32).toString("base64") }),
+  encryption: loadMaterial(
+    { family: "encryption", source: "secret" },
+    { secret: crypto.randomBytes(32).toString("base64") },
+  ),
+};
+const FAMILY = { sign: "signing", verify: "signing", encrypt: "encryption", decrypt: "encryption" };
+const PRODUCERS = ["sign", "encrypt"];
 
-function operation(type, config = {}, evaluate, key = { type: "jose-key", state, keyFor: (p) => keyFor(state, p) }) {
+function operation(type, config = {}, evaluate, key) {
+  const state = states[FAMILY[type]];
+  key ??= { type: "jose-key", state, keyFor: (p) => keyFor(state, p) };
   const handlers = {};
   const logs = [];
   let Constructor;
@@ -26,21 +36,21 @@ function operation(type, config = {}, evaluate, key = { type: "jose-key", state,
   return { handlers, logs };
 }
 
-for (const type of ["sign", "verify"]) {
+for (const type of ["sign", "verify", "encrypt", "decrypt"]) {
   test(`${type}: rejects explicit null options and unsupported input types`, async () => {
-    const fields =
-      type === "sign"
-        ? ["claims", "claimsType", "tokenTo", "tokenToType", "expiryMode", "notBeforeMode", "issuedAt", "typ"]
-        : [
-            "tokenFrom",
-            "tokenFromType",
-            "claimsTo",
-            "claimsToType",
-            "stripBearer",
-            "failureMode",
-            "typ",
-            "requiredClaims",
-          ];
+    const fields = PRODUCERS.includes(type)
+      ? ["claims", "claimsType", "tokenTo", "tokenToType", "expiryMode", "notBeforeMode", "issuedAt", "typ"]
+      : [
+          "tokenFrom",
+          "tokenFromType",
+          "claimsTo",
+          "claimsToType",
+          "stripBearer",
+          "failureMode",
+          "typ",
+          "requiredClaims",
+          "audience",
+        ];
     for (const field of fields) {
       const { handlers } = operation(type, { [field]: null });
       const done = [];
@@ -52,7 +62,7 @@ for (const type of ["sign", "verify"]) {
       assert.equal(done.length, 1, field);
       assert.equal(done[0]?.code, "INVALID_INPUT", field);
     }
-    const field = type === "sign" ? "claimsType" : "tokenFromType";
+    const field = PRODUCERS.includes(type) ? "claimsType" : "tokenFromType";
     const { handlers } = operation(type, { [field]: "str" });
     const done = [];
     await handlers.input(
@@ -129,18 +139,79 @@ test("a send failure still completes the input exactly once", async () => {
   assert.doesNotMatch(done[0].message, /PRIVATE/);
 });
 
-test("sign: clone and serialization failures have the claims error code", async () => {
-  const cycle = {};
-  cycle.self = cycle;
-  for (const payload of [{ value: 1n }, cycle, { value() {} }, { exp: Infinity }]) {
-    const { handlers } = operation("sign", { expiryMode: "preserve" });
-    const done = [];
-    await handlers.input(
-      { payload },
-      () => assert.fail("unserializable claims sent"),
-      (e) => done.push(e),
+for (const type of PRODUCERS)
+  test(`${type}: clone and serialization failures have the claims error code`, async () => {
+    const cycle = {};
+    cycle.self = cycle;
+    for (const payload of [{ value: 1n }, cycle, { value() {} }, { exp: Infinity }]) {
+      const { handlers } = operation(type, { expiryMode: "preserve" });
+      const done = [];
+      await handlers.input(
+        { payload },
+        () => assert.fail("unserializable claims sent"),
+        (e) => done.push(e),
+      );
+      assert.equal(done.length, 1);
+      assert.equal(done[0]?.code, "INVALID_CLAIMS");
+    }
+  });
+
+for (const type of Object.keys(FAMILY)) {
+  for (const late of ["resolve", "reject"]) {
+    test(
+      `${type}: close during crypto suppresses late ${late} without changing the message`,
+      { timeout: 5000 },
+      async (t) => {
+        const jose = require("jose");
+        const state = states[FAMILY[type]];
+        const key = keyFor(state, type);
+        let payload = { sub: "PRIVATE_CRYPTO_RESULT" };
+        if (type === "verify")
+          payload = await new jose.SignJWT(payload)
+            .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+            .setExpirationTime("1h")
+            .sign(key);
+        if (type === "decrypt")
+          payload = await new jose.EncryptJWT(payload)
+            .setProtectedHeader({ alg: "dir", enc: "A256GCM", typ: "JWT" })
+            .setExpirationTime("1h")
+            .encrypt(key);
+        const entered = Promise.withResolvers();
+        const release = Promise.withResolvers();
+        const subtle = crypto.webcrypto.subtle;
+        const native = subtle[type];
+        t.mock.method(subtle, type, async function (...args) {
+          const result = await native.apply(this, args);
+          entered.resolve();
+          await release.promise;
+          if (late === "reject") throw new DOMException("PRIVATE_CRYPTO_ERROR", "OperationError");
+          return result;
+        });
+        const { handlers, logs } = operation(type, { failureMode: "output" });
+        const msg = { payload, retained: "unchanged" };
+        const done = [];
+        const sent = [];
+        const pending = handlers.input(
+          msg,
+          (value) => sent.push(value),
+          (error) => done.push(error),
+        );
+        try {
+          await entered.promise;
+          let closed = 0;
+          handlers.close(false, () => closed++);
+          assert.equal(closed, 1);
+          assert.equal(done.length, 1);
+          assert.equal(done[0].code, "NODE_CLOSING");
+        } finally {
+          release.resolve();
+          await pending;
+        }
+        assert.equal(done.length, 1);
+        assert.deepEqual(sent, []);
+        assert.deepEqual(logs, []);
+        assert.deepEqual(msg, { payload, retained: "unchanged" });
+      },
     );
-    assert.equal(done.length, 1);
-    assert.equal(done[0]?.code, "INVALID_CLAIMS");
   }
-});
+}

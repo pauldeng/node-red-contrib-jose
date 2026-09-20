@@ -184,3 +184,26 @@ test("rejectMsg shapes msg.error and preserves a previous error", () => {
     message: "m",
   });
 });
+
+test("plain objects from a Function sandbox are accepted for claims and output paths", () => {
+  const vm = require("node:vm");
+  const payload = vm.runInNewContext('({ sub: "sandbox" })');
+  assert.equal(applyTimeModes({}, payload, NOW).claims.sub, "sandbox");
+  const msg = vm.runInNewContext("({ result: {} })");
+  writeOutputs({ util }, msg, [[["result", "claims"], { sub: "sandbox" }]]);
+  assert.equal(msg.result.claims.sub, "sandbox");
+  for (const expression of ["new (class Thing {})()", "new (class Object {})()", "Object.create({})", "new Date()"]) {
+    const bad = vm.runInNewContext(expression);
+    assert.throws(() => applyTimeModes({}, bad, NOW), { code: "INVALID_CLAIMS" }, expression);
+    assert.throws(() => preflight({ result: bad }, ["result", "claims"]), { code: "OUTPUT_INVALID" }, expression);
+  }
+});
+
+test("audience policy is static, optional, comma-separated and rejects invalid types", () => {
+  assert.deepEqual(consumeOptions({ audience: " api, worker " }).audience, ["api", "worker"]);
+  assert.equal(consumeOptions({ audience: "api" }).audience, "api");
+  for (const audience of [undefined, "", "  "]) assert.equal(consumeOptions({ audience }).audience, undefined);
+  for (const audience of [null, [], {}, false, 0, ", ,"]) {
+    assert.throws(() => consumeOptions({ audience }), { code: "INVALID_INPUT" });
+  }
+});
