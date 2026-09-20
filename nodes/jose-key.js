@@ -15,10 +15,16 @@ module.exports = function (RED) {
         alg: config.alg,
         algorithms: config.algorithms,
         secretEncoding: config.secretEncoding,
+        url: config.url,
+        allowInsecureLoopback: config.allowInsecureLoopback,
+        cacheSeconds: config.cacheSeconds,
+        timeoutSeconds: config.timeoutSeconds,
       },
       node.credentials ?? {},
     );
-    if (!node.state.ok) node.warn(node.state.error.message); // package-owned category text, once per deploy
+    if (!node.state.ok)
+      node.warn(node.state.error.message); // package-owned category text, once per deploy
+    else if (node.state.warning) node.warn(node.state.warning);
     node.keyFor = (purpose) => keyFor(node.state, purpose);
   }
   RED.nodes.registerType("jose-key", JoseKeyNode, {

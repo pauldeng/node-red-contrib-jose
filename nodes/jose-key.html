@@ -51,6 +51,64 @@
             return values.length > 0 && values.every((alg) => ALGS.signing.includes(alg) && !alg.startsWith("HS"));
           },
         },
+        url: {
+          value: "",
+          validate: function (v) {
+            const input = $("#node-config-input-source");
+            const source = input.length ? input.val() : this.source === undefined ? "secret" : this.source;
+            if (source !== "remote-jwks") return true;
+            if (typeof v !== "string" || v.trim() === "") return false;
+            let url;
+            try {
+              url = new URL(v.trim());
+            } catch {
+              return false;
+            }
+            if (url.username || url.password || url.hash) return false;
+            if (url.protocol === "https:") return true;
+            const box = $("#node-config-input-allowInsecureLoopback");
+            const allow = box.length ? box.is(":checked") : this.allowInsecureLoopback === true;
+            return url.protocol === "http:" && allow && ["127.0.0.1", "[::1]", "localhost"].includes(url.hostname);
+          },
+        },
+        allowInsecureLoopback: {
+          value: false,
+          validate: function (v) {
+            const input = $("#node-config-input-source");
+            const source = input.length ? input.val() : this.source;
+            return source !== "remote-jwks" || v === undefined || typeof v === "boolean";
+          },
+        },
+        cacheSeconds: {
+          value: 600,
+          validate: function (v) {
+            const input = $("#node-config-input-source");
+            const source = input.length ? input.val() : this.source === undefined ? "secret" : this.source;
+            if (source !== "remote-jwks" || v === undefined) return true;
+            return (
+              (typeof v === "number" || typeof v === "string") &&
+              String(v).trim() !== "" &&
+              Number.isSafeInteger(Number(v)) &&
+              Number(v) >= 1 &&
+              Number(v) <= 3600
+            );
+          },
+        },
+        timeoutSeconds: {
+          value: 5,
+          validate: function (v) {
+            const input = $("#node-config-input-source");
+            const source = input.length ? input.val() : this.source === undefined ? "secret" : this.source;
+            if (source !== "remote-jwks" || v === undefined) return true;
+            return (
+              (typeof v === "number" || typeof v === "string") &&
+              String(v).trim() !== "" &&
+              Number.isSafeInteger(Number(v)) &&
+              Number(v) >= 1 &&
+              Number(v) <= 30
+            );
+          },
+        },
       },
       credentials: {
         secret: { type: "password" },
@@ -87,6 +145,7 @@
         };
         $("#node-config-input-family").on("change", rebuildAlgs);
         $("#node-config-input-source").on("change", show);
+        $("#node-config-input-allowInsecureLoopback").on("change", () => $("#node-config-input-url").trigger("change"));
         rebuildAlgs();
         show();
       },
@@ -144,6 +203,41 @@
         <option value="utf8">utf8 text</option>
       </select>
     </div>
+    <div class="form-row" data-source="remote-jwks">
+      <label for="node-config-input-url"><i class="fa fa-globe"></i> JWKS URL</label>
+      <input type="text" id="node-config-input-url" placeholder="https://issuer.example/.well-known/jwks.json" />
+    </div>
+    <div class="form-row" data-source="remote-jwks">
+      <label for="node-config-input-allowInsecureLoopback"><i class="fa fa-unlock"></i> Loopback</label>
+      <input type="checkbox" id="node-config-input-allowInsecureLoopback" style="width: auto; vertical-align: top" />
+      <span>allow local http for testing</span>
+    </div>
+    <div class="form-row" data-source="remote-jwks">
+      <label for="node-config-input-cacheSeconds"><i class="fa fa-clock-o"></i> Cache</label>
+      <input
+        type="number"
+        id="node-config-input-cacheSeconds"
+        min="1"
+        max="3600"
+        step="1"
+        placeholder="600"
+        style="width: 85px"
+      />
+      <span>seconds (1–3600)</span>
+    </div>
+    <div class="form-row" data-source="remote-jwks">
+      <label for="node-config-input-timeoutSeconds"><i class="fa fa-hourglass-half"></i> Timeout</label>
+      <input
+        type="number"
+        id="node-config-input-timeoutSeconds"
+        min="1"
+        max="30"
+        step="1"
+        placeholder="5"
+        style="width: 85px"
+      />
+      <span>seconds (1–30)</span>
+    </div>
     <div class="form-row" data-source="local-jwks remote-jwks">
       <label for="node-config-input-algorithms"><i class="fa fa-cog"></i> Algorithms</label>
       <input type="text" id="node-config-input-algorithms" placeholder="RS256, ES256" />
@@ -185,8 +279,11 @@
 
   When the material cannot be used, the configuration logs a warning at deploy time, dependent nodes show `key error`, and every message they receive fails with `KEY_UNUSABLE`.
 
-  > [!NOTE]
-  > The remote JSON Web Key Set URL source is not implemented yet.
+  A remote JSON Web Key Set verifies signatures only. It is fetched lazily from _JWKS URL_ over `https` and cached for _Cache_ seconds (600 by default); the network timeout is _Timeout_ seconds (5 by default). Plain `http` is accepted only for `127.0.0.1`, `[::1]` or `localhost` when _Loopback_ is ticked, for local testing, and logs a warning at deploy. _Algorithms_ must list accepted asymmetric JWS algorithms. With several algorithms, keys without their own `alg` are ineligible.
+
+  jose selects the key by `kid`. An unknown `kid` can trigger a refetch once the 30-second cooldown since the last successful fetch ends; during cooldown it is rejected without another request. Expired caches refresh on use. Removed keys can remain accepted until refresh; changing the key configuration or a full deploy creates a fresh cache. Redeploying only a consumer keeps the shared cache. A pending fetch may continue until completion or timeout after a consumer closes, but that consumer ignores the late result.
+
+  Transport failures, non-200 responses and unparsable bodies are `JWKS_FETCH`. A stall before response headers is `ERR_JWKS_TIMEOUT`; a stalled body after 200 headers is `JWKS_FETCH`. Invalid sets or unusable matching key material are `ERR_JWKS_INVALID`; these faults always reach Catch. There is no package-enforced response byte or key-count limit, and a timeout does not bound memory use.
 
   ### References
 

@@ -247,8 +247,48 @@ for (const theme of E.THEMES) {
     await expect(page.locator("#node-config-input-alg")).toBeHidden();
     await expect(page.locator("#node-config-input-algorithms")).toBeVisible();
     await expect(page.locator("#node-config-input-jwk")).toBeVisible();
+    await page.selectOption("#node-config-input-source", "remote-jwks");
+    await expect(page.locator("#node-config-input-jwk")).toBeHidden();
+    for (const field of ["url", "allowInsecureLoopback", "cacheSeconds", "timeoutSeconds", "algorithms"])
+      await expect(page.locator(`#node-config-input-${field}`)).toBeVisible();
+    // Node-RED validates on change/keyup; fill alone does not fire those, so dispatch change after each value.
+    const setUrl = async (value) => {
+      await page.fill("#node-config-input-url", value);
+      await page.locator("#node-config-input-url").dispatchEvent("change");
+    };
+    await setUrl("http://127.0.0.1:1880/jwks");
+    await expect(page.locator("#node-config-input-url")).toHaveClass(/input-error/);
+    await page.check("#node-config-input-allowInsecureLoopback");
+    await expect(page.locator("#node-config-input-url")).not.toHaveClass(/input-error/);
+    await setUrl("https://user:pw@issuer.example/jwks");
+    await expect(page.locator("#node-config-input-url")).toHaveClass(/input-error/);
+    await setUrl("https://issuer.example/.well-known/jwks.json");
+    await expect(page.locator("#node-config-input-url")).not.toHaveClass(/input-error/);
+    await page.selectOption("#node-config-input-family", "signing");
+    await page.fill("#node-config-input-algorithms", "ES256, RS256");
+    await page.fill("#node-config-input-cacheSeconds", "120");
+    await page.fill("#node-config-input-timeoutSeconds", "3");
+    for (const field of ["algorithms", "cacheSeconds", "timeoutSeconds"])
+      await page.locator(`#node-config-input-${field}`).dispatchEvent("change");
+    await expect(page.locator("#node-config-input-timeoutSeconds")).not.toHaveClass(/input-error/);
     await E.assertNoOverflow(page);
-    await page.screenshot({ path: `test/e2e/screenshots/jose-key-${theme}.png` });
+    await page.screenshot({ path: `test/e2e/screenshots/jose-key-remote-${theme}.png` });
+    await page.setViewportSize(E.VIEWPORTS[0]);
+    await E.settled(page);
+    await E.assertNoOverflow(page);
+    await page.screenshot({ path: `test/e2e/screenshots/jose-key-remote-${theme}-wide.png` });
+    await page.selectOption("#node-config-input-source", "secret");
+    await expect(page.locator("#node-config-input-url")).toBeHidden();
+    await page.selectOption("#node-config-input-source", "remote-jwks");
+    await expect(page.locator("#node-config-input-cacheSeconds")).toHaveValue("120");
+    await E.closeDialog(page, { config: true });
+    await E.openConfig(page, "jose-key", "key1");
+    await expect(page.locator("#node-config-input-source")).toHaveValue("remote-jwks");
+    await expect(page.locator("#node-config-input-url")).toHaveValue("https://issuer.example/.well-known/jwks.json");
+    await expect(page.locator("#node-config-input-algorithms")).toHaveValue("ES256, RS256");
+    await expect(page.locator("#node-config-input-cacheSeconds")).toHaveValue("120");
+    await expect(page.locator("#node-config-input-timeoutSeconds")).toHaveValue("3");
+    await expect(page.locator("#node-config-input-allowInsecureLoopback")).toBeChecked();
     await E.closeDialog(page, { save: false, config: true });
   });
 }
@@ -327,4 +367,22 @@ test("M3 validators reject malformed imports without throwing and honor inactive
     return results;
   });
   for (const row of result) expect(row.actual, `${row.id} ${row.field}`).toBe(row.expected);
+});
+
+test("M4 remote validators match runtime types for imported settings", async ({ page, nr }) => {
+  await nr.deploy(flow);
+  await E.gotoEditor(page, nr);
+  const rows = await page.evaluate(() => {
+    const node = RED.nodes.node("key1");
+    const config = { ...node, source: "remote-jwks", url: "https://issuer.example/jwks" };
+    return ["cacheSeconds", "timeoutSeconds", "allowInsecureLoopback"].flatMap((field) =>
+      [null, "true", 1, true, [1], {}].map((value) => ({
+        field,
+        value,
+        actual: node._def.defaults[field].validate?.call(config, value) ?? true,
+        expected: field === "allowInsecureLoopback" ? typeof value === "boolean" : value === 1,
+      })),
+    );
+  });
+  for (const row of rows) expect(row.actual, `${row.field}: ${JSON.stringify(row.value)}`).toBe(row.expected);
 });

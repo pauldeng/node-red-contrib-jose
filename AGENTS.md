@@ -6,7 +6,7 @@ Design, contracts and milestones live in `PLAN.md` and `planning/` (untracked, n
 
 - `npm run check` — package sanity, editor contract, async-style gates
 - `npm test` — checks, package contract and real-runtime tests (Node-RED child process)
-- `npm run test:runtime` — runtime tier only
+- `npm run test:runtime` — runtime tier only; the remote JWKS file needs `openssl` on the PATH to mint a throwaway TLS certificate (`apk add openssl` in the `node:24.0-alpine` floor container)
 - `npm run test:e2e` — Playwright against the real editor; look at `test/e2e/screenshots/`
 - `npm run lint && npm run format:check`
 - `npm run check:release` — publication metadata sanity; does not publish

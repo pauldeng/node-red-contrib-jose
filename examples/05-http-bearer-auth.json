@@ -1,0 +1,213 @@
+[
+  {
+    "id": "jose_ex5_tab",
+    "type": "tab",
+    "label": "05 HTTP bearer authentication",
+    "disabled": false,
+    "info": ""
+  },
+  {
+    "id": "jose_ex5_key",
+    "type": "jose-key",
+    "name": "demo API secret",
+    "family": "signing",
+    "source": "secret",
+    "alg": "auto",
+    "secretEncoding": "base64"
+  },
+  {
+    "id": "jose_ex5_note",
+    "type": "comment",
+    "z": "jose_ex5_tab",
+    "name": "Setup: paste a secret, deploy, mint a token, call the protected endpoint",
+    "info": "1. Generate a secret with `openssl rand -base64 32` and paste it into the *demo API secret* configuration.\n2. Deploy and click the inject button: the *token to copy* debug shows a bearer token for `alice`.\n3. Call the protected endpoint with and without the token:\n\n```\ncurl -i http://127.0.0.1:1880/jose-example-protected -H \"Authorization: Bearer <token>\"\ncurl -i http://127.0.0.1:1880/jose-example-protected\n```\n\nA valid token answers `200` with the verified claims; token rejections answer `401` with a generic body and no detail about why. The verify node reads `msg.req.headers.authorization`, strips the `Bearer` scheme, and requires issuer `https://issuer.example`, audience `example-api` and an unexpired `exp`. Token rejections leave on the second output; configuration or infrastructure faults reach the scoped Catch node and answer `503` with a generic body.",
+    "x": 250,
+    "y": 40,
+    "wires": []
+  },
+  {
+    "id": "jose_ex5_inject",
+    "type": "inject",
+    "z": "jose_ex5_tab",
+    "name": "mint claims",
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "{\"sub\":\"alice\",\"scope\":\"read\"}",
+    "payloadType": "json",
+    "x": 130,
+    "y": 100,
+    "wires": [["jose_ex5_sign"]]
+  },
+  {
+    "id": "jose_ex5_sign",
+    "type": "jose-sign",
+    "z": "jose_ex5_tab",
+    "name": "",
+    "key": "jose_ex5_key",
+    "claims": "payload",
+    "claimsType": "msg",
+    "typ": "JWT",
+    "expiryMode": "ttl",
+    "ttlSeconds": 3600,
+    "expiresAt": "",
+    "issuedAt": true,
+    "notBeforeMode": "preserve",
+    "notBeforeSeconds": 0,
+    "notBeforeAt": "",
+    "tokenTo": "payload",
+    "tokenToType": "msg",
+    "x": 300,
+    "y": 100,
+    "wires": [["jose_ex5_token"]],
+    "issuer": "https://issuer.example",
+    "issuerType": "str",
+    "audience": "example-api",
+    "audienceType": "str"
+  },
+  {
+    "id": "jose_ex5_token",
+    "type": "debug",
+    "z": "jose_ex5_tab",
+    "name": "token to copy",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 490,
+    "y": 100,
+    "wires": []
+  },
+  {
+    "id": "jose_ex5_httpin",
+    "type": "http in",
+    "z": "jose_ex5_tab",
+    "name": "GET /jose-example-protected",
+    "url": "/jose-example-protected",
+    "method": "get",
+    "upload": false,
+    "swaggerDoc": "",
+    "x": 190,
+    "y": 220,
+    "wires": [["jose_ex5_verify"]]
+  },
+  {
+    "id": "jose_ex5_verify",
+    "type": "jose-verify",
+    "z": "jose_ex5_tab",
+    "name": "",
+    "key": "jose_ex5_key",
+    "tokenFrom": "req.headers.authorization",
+    "tokenFromType": "msg",
+    "stripBearer": true,
+    "typ": "JWT",
+    "requiredClaims": "exp",
+    "claimsTo": "payload",
+    "claimsToType": "msg",
+    "failureMode": "output",
+    "x": 430,
+    "y": 220,
+    "wires": [["jose_ex5_ok"], ["jose_ex5_deny"]],
+    "issuer": "https://issuer.example",
+    "audience": "example-api"
+  },
+  {
+    "id": "jose_ex5_ok",
+    "type": "http response",
+    "z": "jose_ex5_tab",
+    "name": "200 claims",
+    "statusCode": "200",
+    "headers": {},
+    "x": 680,
+    "y": 200,
+    "wires": []
+  },
+  {
+    "id": "jose_ex5_deny",
+    "type": "change",
+    "z": "jose_ex5_tab",
+    "name": "401 invalid_token",
+    "rules": [
+      {
+        "t": "set",
+        "p": "statusCode",
+        "pt": "msg",
+        "to": "401",
+        "tot": "num"
+      },
+      {
+        "t": "set",
+        "p": "payload",
+        "pt": "msg",
+        "to": "{\"error\":\"invalid_token\"}",
+        "tot": "json"
+      }
+    ],
+    "action": "",
+    "property": "",
+    "from": "",
+    "to": "",
+    "reg": false,
+    "x": 640,
+    "y": 260,
+    "wires": [["jose_ex5_denyout"]]
+  },
+  {
+    "id": "jose_ex5_denyout",
+    "type": "http response",
+    "z": "jose_ex5_tab",
+    "name": "",
+    "statusCode": "",
+    "headers": {},
+    "x": 830,
+    "y": 260,
+    "wires": []
+  },
+  {
+    "id": "jose_ex5_fault",
+    "type": "catch",
+    "z": "jose_ex5_tab",
+    "name": "verification service fault",
+    "scope": ["jose_ex5_verify"],
+    "uncaught": false,
+    "x": 220,
+    "y": 340,
+    "wires": [["jose_ex5_unavailable"]]
+  },
+  {
+    "id": "jose_ex5_unavailable",
+    "type": "change",
+    "z": "jose_ex5_tab",
+    "name": "503 service_unavailable",
+    "rules": [
+      {
+        "t": "set",
+        "p": "statusCode",
+        "pt": "msg",
+        "to": "503",
+        "tot": "num"
+      },
+      {
+        "t": "set",
+        "p": "payload",
+        "pt": "msg",
+        "to": "{\"error\":\"service_unavailable\"}",
+        "tot": "json"
+      }
+    ],
+    "x": 490,
+    "y": 340,
+    "wires": [["jose_ex5_denyout"]]
+  }
+]

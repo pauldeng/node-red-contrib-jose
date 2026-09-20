@@ -2,7 +2,7 @@
 
 Node-RED nodes to sign, verify, encrypt and decrypt JSON Web Tokens, built on [jose](https://github.com/panva/jose).
 
-**Status: pre-release.** All four operation nodes work with shared secrets, PEM keys and certificates, JSON Web Keys and pasted JSON Web Key Sets. Remote JSON Web Key Set URLs are still to come; see `CHANGELOG.md`.
+**Status: pre-release, feature complete for 0.1.0.** All four operation nodes work with shared secrets, PEM keys and certificates, JSON Web Keys, pasted JSON Web Key Sets and remote JSON Web Key Set URLs. Qualification (performance measurement, security scan, packaging rehearsal) is still ahead; see `CHANGELOG.md`.
 
 Requires the Node-RED and Node.js versions declared in `package.json`.
 
@@ -22,7 +22,7 @@ Requires the Node-RED and Node.js versions declared in `package.json`.
 2. Create a secret: `openssl rand -base64 32`.
 3. Open the example’s key configuration (_demo HS256 secret_ or _demo A256GCM secret_), paste the secret, deploy, and press the inject button.
 
-The first debug node shows the token, the second the verified claims with `iat` and `exp`.
+The first debug node shows the token, the second the verified claims with `iat` and `exp`. Example 04 publishes a JSON Web Key Set from Node-RED and verifies against it over the loopback URL; example 05 protects an HTTP endpoint with bearer tokens and answers `401` to anything invalid.
 
 ## Keys and algorithms
 
@@ -31,11 +31,13 @@ The first debug node shows the token, the second the verified claims with `iat` 
 | Shared secret    | base64 (default), base64url, hex or utf8 text                                             | `HS256` `HS384` `HS512`                                       | `dir` with `A256GCM` (32 bytes)                     |
 | PEM              | private key (PKCS#8, PKCS#1, SEC1, optionally encrypted), public key or X.509 certificate | `RS*` `PS*` (RSA), `ES256/384/512` (P-256/384/521), `Ed25519` | `RSA-OAEP-256`, `ECDH-ES+A256KW` (P-curves, X25519) |
 | JSON Web Key     | one JWK; `alg`, `use` and `key_ops` are enforced                                          | as above, plus `oct`                                          | as above, plus `oct`                                |
-| JSON Web Key Set | pasted set of public keys plus an explicit algorithm list                                 | verify only                                                   | not applicable                                      |
+| JSON Web Key Set | pasted public set or remote HTTPS URL plus an explicit algorithm list                     | verify only                                                   | not applicable                                      |
 
 Each key configuration serves one family, signing or encryption, and one algorithm. `auto` derives the algorithm from the material: a shared secret gives `HS256` for signing and `dir` with `A256GCM` for encryption, where the secret must be exactly 32 bytes; an RSA key gives `RS256` or `RSA-OAEP-256`, a P-256 key `ES256` or `ECDH-ES+A256KW`, and so on. A private key serves both directions of its family, so one configuration can sign and verify. Secrets are decoded strictly in the selected encoding and must be at least 32 bytes for `HS256`, 48 for `HS384` and 64 for `HS512`. A token whose header names any other algorithm is rejected with `ERR_JOSE_ALG_NOT_ALLOWED`; the header never chooses the key or algorithm. A credential may be a whole-value environment reference such as `${JWT_SECRET}`.
 
 For a private JWK, permitted operations are narrowed to each key part before use; restrictions are never expanded. For RSA-OAEP with `key_ops`, jose requires `encrypt` plus `wrapKey` to encrypt and `decrypt` plus `unwrapKey` to decrypt. An ECDH private JWK with `deriveBits` can serve both directions; its derived public key has no WebCrypto usages.
+
+Remote JWKS keys without an `alg` declaration are eligible only when exactly one algorithm is configured. Unknown key IDs respect jose’s 30-second fetch cooldown.
 
 ## Time claims
 
@@ -51,11 +53,12 @@ Every failure is a fresh error with a stable `code` and a package-owned message.
 
 - Signing proves the issuer, not the caller's authority; encryption alone does not authenticate the sender; verification is not authorisation.
 - Stored key material is not returned to the editor; password-type credentials show a placeholder. Newly pasted material is visible in the PEM/JWK textareas until saved.
+- A remote JSON Web Key Set is fetched over `https` only; the loopback `http` opt-in exists for local testing and warns at deploy. Keys stay cached for the configured time, so revoking a key at the issuer is not immediate. Change the key configuration or use a full deploy to create a fresh cache; redeploying only a consumer keeps it. Responses have no package-enforced byte or key-count cap; a timeout does not bound memory use.
 - Bound inbound rates and HTTP body sizes upstream. Choose an explicit bounded queue or drop policy; a Delay node that queues indefinitely does not bound memory. The jose nodes do not cap in-flight messages.
 
 ## Development
 
-See `AGENTS.md` for the commands and rules. `npm test` runs the checkers, unit tests and real-runtime tests; `npm run test:e2e` drives the editor with Playwright.
+See `AGENTS.md` for the commands and rules. `npm test` runs the checkers, unit tests and real-runtime tests; `npm run test:e2e` drives the editor with Playwright. Runtime TLS tests require `openssl` to generate temporary certificates; missing or failed certificate generation is a test failure, not a skip.
 
 ## License
 

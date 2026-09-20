@@ -395,3 +395,34 @@ for (const type of PRODUCERS) {
     assert.equal(done[0]?.code, "INVALID_INPUT", "the effective claims serialize; jose rejected key permissions");
   });
 }
+
+test("verify: close while a remote key lookup is pending settles once with NODE_CLOSING", async () => {
+  const gate = Promise.withResolvers();
+  const called = Promise.withResolvers();
+  const state = { ok: true, family: "signing", alg: "ES256", algorithms: ["ES256"], keys: { kind: "jwks" } };
+  const resolver = () => {
+    called.resolve();
+    return gate.promise; // a remote lookup that does not answer until released
+  };
+  const key = { type: "jose-key", state, keyFor: () => resolver };
+  const { handlers, logs } = operation("verify", {}, undefined, key);
+  const token = await new jose.SignJWT({})
+    .setProtectedHeader({ alg: "ES256", typ: "JWT" })
+    .setExpirationTime("1h")
+    .sign(crypto.generateKeyPairSync("ec", { namedCurve: "P-256" }).privateKey);
+  const done = [];
+  const pending = handlers.input(
+    { payload: token },
+    () => assert.fail("sent after close"),
+    (e) => done.push(e),
+  );
+  await called.promise; // the input is now waiting on the resolver, not on evaluation
+  let closed = 0;
+  handlers.close(false, () => closed++);
+  assert.equal(closed, 1);
+  assert.deepEqual([done.length, done[0].code], [1, "NODE_CLOSING"]);
+  gate.reject(Object.assign(new Error("PRIVATE"), { code: "ERR_JWKS_TIMEOUT" }));
+  await pending;
+  assert.equal(done.length, 1, "the late rejection is ignored");
+  assert.deepEqual(logs, []);
+});

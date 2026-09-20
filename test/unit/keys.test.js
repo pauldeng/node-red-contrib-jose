@@ -84,7 +84,7 @@ test("loadMaterial never throws and names the failure category only", () => {
     [{ family: "signing", source: "secret" }, {}, /empty/],
     [{ family: "signing", source: "secret" }, { secret: "YR==" }, /not canonical/],
     [{ family: "signing", source: "pem" }, { pem: "x" }, /could not be parsed/],
-    [{ family: "signing", source: "remote-jwks" }, {}, /not implemented yet/],
+    [{ family: "signing", source: "remote-jwks" }, {}, /JWKS URL is empty/],
     [{ family: "signing", source: "nope" }, {}, /unknown key source/],
     [{ family: "both", source: "secret" }, { secret: "YQ==" }, /unknown key family/],
     [
