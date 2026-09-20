@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here. Format: Keep a Changelog. Versioning: semver; breaking changes are called out under **Breaking**.
 
-## [Unreleased]
+## [0.1.0] - 2026-09-20
 
 ### Added
 
@@ -14,6 +14,7 @@ All notable changes to this project are documented here. Format: Keep a Changelo
 - Examples `01-sign-and-verify-hs256`, `02-encrypt-and-decrypt`, `03-rs256-pem-key`, `04-verify-with-remote-jwks` and `05-http-bearer-auth`.
 - Package skeleton: lint/format/check gates, real Node-RED test harness, package contract test, CI matrix including the Node 24.0 floor line.
 - Qualification tooling: `npm run bench` measures raw jose against deployed flows and a burst against a stalled JWKS endpoint; `npm run check:install` installs the packed tarball into a clean Node-RED 5 in Docker and round-trips example 01. `SECURITY.md` states the guarantees and their limits.
+- Maintainer release guide and manually triggered OIDC publication workflow, gated on the version tag, public repository, deterministic tests, dependency audit and clean tarball installation.
 
 ### Security
 

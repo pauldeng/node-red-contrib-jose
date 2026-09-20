@@ -96,14 +96,31 @@ test("CI matrix tests the declared Node floor without requiring a release workfl
   );
 });
 
-test("release uses OIDC only when introduced in M6", (t) => {
+test("release requires an explicit version tag, public repository and token-free OIDC", () => {
   const rel = path.join(ROOT, ".github/workflows/release.yml");
-  if (!fs.existsSync(rel)) {
-    t.skip("release workflow is deferred to M6");
-    return;
-  }
+  assert.ok(fs.existsSync(rel), "release workflow is required before publication");
   const release = fs.readFileSync(rel, "utf8").replace(/(^|\s)#.*$/gm, ""); // drop full-line and inline comments
   assert.doesNotMatch(release, /NPM_TOKEN|NODE_AUTH_TOKEN|npm login|secrets\./, "release must not use tokens");
+  assert.match(release, /workflow_dispatch:/);
+  assert.doesNotMatch(release, /^\s+(push|pull_request|release):/m, "publication requires a manual dispatch");
+  assert.match(release, /environment: release/);
   assert.match(release, /id-token: write/);
+  assert.match(release, /package-manager-cache: false/);
   assert.match(release, /--provenance/);
+  for (const gate of ["npm test", "npm run check:release", "npm audit --omit=dev", "npm run check:install"])
+    assert.ok(release.indexOf(gate) >= 0 && release.indexOf(gate) < release.indexOf("npm publish --provenance"));
+
+  // Execute the actual shell guard: branch dispatches and wrong tags must fail, including shell-like input.
+  const guard = release.match(/run: \|\n((?: {10}[^\n]*\n)+)/)?.[1];
+  assert.ok(guard, "release must retain an executable pre-publication guard");
+  const runGuard = (ref, isPrivate = "false") =>
+    execFileSync("sh", ["-e", "-c", guard], {
+      cwd: ROOT,
+      env: { ...process.env, RELEASE_REF: ref, REPOSITORY_PRIVATE: isPrivate },
+      stdio: "pipe",
+    });
+  assert.doesNotThrow(() => runGuard(`refs/tags/v${pkg.version}`));
+  for (const ref of ["refs/heads/main", "refs/tags/v999.0.0", "refs/tags/v$(exit 0)", ""])
+    assert.throws(() => runGuard(ref));
+  assert.throws(() => runGuard(`refs/tags/v${pkg.version}`, "true"));
 });

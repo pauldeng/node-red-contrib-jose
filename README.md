@@ -2,7 +2,7 @@
 
 Node-RED nodes to sign, verify, encrypt and decrypt JSON Web Tokens, built on [jose](https://github.com/panva/jose).
 
-**Status: pre-release, feature complete for 0.1.0.** All four operation nodes work with shared secrets, PEM keys and certificates, JSON Web Keys, pasted JSON Web Key Sets and remote JSON Web Key Set URLs. Performance has been measured and the packed tarball installs cleanly; the Codex Security review is recorded in the local qualification evidence; release preparation remains before publishing. See `CHANGELOG.md`.
+All four operation nodes work with shared secrets, PEM keys and certificates, JSON Web Keys, pasted JSON Web Key Sets and remote JSON Web Key Set URLs. See [CHANGELOG.md](CHANGELOG.md) for the release history.
 
 Requires the Node-RED and Node.js versions declared in `package.json`.
 
@@ -17,6 +17,8 @@ Requires the Node-RED and Node.js versions declared in `package.json`.
 | `jose-decrypt`             | Decrypts a compact JWE with the key's algorithm, validates the claims and outputs them, or rejects it.                                                       |
 
 ## Quick start
+
+Install `@pauldeng/node-red-contrib-jose` through **Manage palette → Install**, or run `npm install @pauldeng/node-red-contrib-jose` in your Node-RED user directory and restart Node-RED.
 
 1. Import the example `01-sign-and-verify-hs256` (or `02-encrypt-and-decrypt`) from the Node-RED import menu.
 2. Create a secret: `openssl rand -base64 32`.

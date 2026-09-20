@@ -1,0 +1,33 @@
+name: Release
+on:
+  workflow_dispatch:
+permissions: { contents: read }
+concurrency: { group: npm-release, cancel-in-progress: false }
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: release
+    permissions: { contents: read, id-token: write }
+    steps:
+      - uses: actions/checkout@v7
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+      - name: Require the version tag and public repository
+        env:
+          RELEASE_REF: "${{ github.ref }}"
+          REPOSITORY_PRIVATE: "${{ github.event.repository.private }}"
+        run: |
+          test "$RELEASE_REF" = "refs/tags/v$(node -p 'require("./package.json").version')"
+          test "$REPOSITORY_PRIVATE" = "false"
+      - run: npm install --global npm@11.19.0
+      - run: npm ci --ignore-scripts
+      - run: npm run lint && npm run format:check && npm test && npm run check:release
+      - run: npm audit --omit=dev
+      - run: npm run check:install
+      - run: npm publish --dry-run --access public
+      - run: npm publish --provenance --access public

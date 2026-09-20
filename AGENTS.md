@@ -11,7 +11,7 @@ Design, contracts and milestones live in `PLAN.md` and `planning/` (untracked, n
 - `npm run lint && npm run format:check`
 - `npm run bench` — throughput and burst measurements against a real Node-RED; prints a table for README, not a gate
 - `npm run check:install` — packs the tarball and installs it into a clean Node-RED 5 on `node:24-alpine` in Docker, then round-trips example 01
-- `npm run check:release` — publication metadata sanity; does not publish
+- `npm run check:release` — publication metadata sanity; does not publish. Publishing itself follows `docs/RELEASE.md` and is the maintainer's action
 
 ## Rules
 
