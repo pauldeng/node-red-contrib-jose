@@ -18,15 +18,21 @@ module.exports = function (RED) {
             typ: config.typ,
             requiredClaims: config.requiredClaims,
             audience: config.audience,
+            issuer: config.issuer,
+            subject: config.subject,
+            clockTolerance: config.clockTolerance,
+            maxTokenAge: config.maxTokenAge,
             claimsTo: config.claimsTo,
             claimsToType: config.claimsToType,
+            headerTo: config.headerTo,
+            headerToType: config.headerToType,
             failureMode: config.failureMode,
           },
           { stripBearer: true },
         ),
       run: (ctx) =>
         consume(ctx, (token, key, state, options) =>
-          jose.jwtVerify(token, key, { ...options, algorithms: [state.alg] }),
+          jose.jwtVerify(token, key, { ...options, algorithms: state.algorithms }),
         ),
     });
   }

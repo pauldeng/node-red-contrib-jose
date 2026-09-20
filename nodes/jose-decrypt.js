@@ -18,8 +18,14 @@ module.exports = function (RED) {
             typ: config.typ,
             requiredClaims: config.requiredClaims,
             audience: config.audience,
+            issuer: config.issuer,
+            subject: config.subject,
+            clockTolerance: config.clockTolerance,
+            maxTokenAge: config.maxTokenAge,
             claimsTo: config.claimsTo,
             claimsToType: config.claimsToType,
+            headerTo: config.headerTo,
+            headerToType: config.headerToType,
             failureMode: config.failureMode,
           },
           { stripBearer: false },
@@ -28,7 +34,7 @@ module.exports = function (RED) {
         consume(ctx, (token, key, state, options) =>
           jose.jwtDecrypt(token, key, {
             ...options,
-            keyManagementAlgorithms: [state.alg],
+            keyManagementAlgorithms: state.algorithms,
             contentEncryptionAlgorithms: [state.enc],
           }),
         ),

@@ -37,6 +37,65 @@
         },
       },
       claimsToType: { value: "msg" },
+      issuer: {
+        value: "",
+        validate: function (v) {
+          return (
+            v === undefined ||
+            (typeof v === "string" && (v.trim() === "" || v.split(",").some((part) => part.trim() !== "")))
+          );
+        },
+      },
+      subject: { value: "" },
+      clockTolerance: {
+        value: 0,
+        validate: function (v) {
+          return (
+            v === undefined ||
+            v === "" ||
+            ((typeof v === "string" || typeof v === "number") &&
+              String(v).trim() !== "" &&
+              Number.isSafeInteger(Number(v)) &&
+              Number(v) >= 0 &&
+              Number(v) <= 300)
+          );
+        },
+      },
+      maxTokenAge: {
+        value: "",
+        validate: function (v) {
+          return (
+            v === undefined ||
+            v === "" ||
+            ((typeof v === "string" || typeof v === "number") &&
+              String(v).trim() !== "" &&
+              Number.isSafeInteger(Number(v)) &&
+              Number(v) >= 1 &&
+              Number(v) <= Number.MAX_SAFE_INTEGER)
+          );
+        },
+      },
+      headerTo: {
+        value: "",
+        validate: function (v) {
+          if (v === undefined || v === "") return true;
+          if (
+            typeof v !== "string" ||
+            !/^[A-Za-z_$][\w$]*(\.[A-Za-z_$][\w$]*)*$/.test(v) ||
+            v.split(".").includes("__proto__")
+          )
+            return false;
+          const input = $("#node-input-claimsTo");
+          const claimsTo = input.length ? input.val() : this.claimsTo === undefined ? "payload" : this.claimsTo;
+          if (typeof claimsTo !== "string") return false;
+          const a = claimsTo.split("."),
+            b = v.split(".");
+          const n = Math.min(a.length, b.length);
+          for (let i = 0; i < n; i++) if (a[i] !== b[i]) return true;
+          return false;
+        },
+      },
+      headerToType: { value: "msg" },
       failureMode: { value: "catch" },
     },
     label: function () {
@@ -49,6 +108,7 @@
         types: ["msg", "flow", "global", "jsonata"],
       });
       $("#node-input-claimsTo").typedInput({ default: "msg", typeField: "#node-input-claimsToType", types: ["msg"] });
+      $("#node-input-headerTo").typedInput({ default: "msg", typeField: "#node-input-headerToType", types: ["msg"] });
     },
   });
 </script>
@@ -82,9 +142,45 @@
       <input type="text" id="node-input-audience" placeholder="Optional recipient list" style="width: 70%" />
     </div>
     <div class="form-row">
+      <label for="node-input-issuer"><i class="fa fa-building-o"></i> Issuer</label>
+      <input type="text" id="node-input-issuer" placeholder="Optional accepted issuer list" style="width: 70%" />
+    </div>
+    <div class="form-row">
+      <label for="node-input-subject"><i class="fa fa-user-o"></i> Subject</label>
+      <input type="text" id="node-input-subject" placeholder="Optional required subject" style="width: 70%" />
+    </div>
+    <div class="form-row">
+      <label for="node-input-clockTolerance"><i class="fa fa-clock-o"></i> Tolerance</label>
+      <input
+        type="number"
+        id="node-input-clockTolerance"
+        min="0"
+        max="300"
+        step="1"
+        placeholder="0"
+        style="width: 70%"
+      />
+    </div>
+    <div class="form-row">
+      <label for="node-input-maxTokenAge"><i class="fa fa-hourglass-end"></i> Max age</label>
+      <input
+        type="number"
+        id="node-input-maxTokenAge"
+        min="1"
+        step="1"
+        placeholder="seconds since iat, blank for no limit"
+        style="width: 70%"
+      />
+    </div>
+    <div class="form-row">
       <label for="node-input-claimsTo"><i class="fa fa-sign-out"></i> Claims to</label>
       <input type="text" id="node-input-claimsTo" />
       <input type="hidden" id="node-input-claimsToType" />
+    </div>
+    <div class="form-row">
+      <label for="node-input-headerTo"><i class="fa fa-list-alt"></i> Header to</label>
+      <input type="text" id="node-input-headerTo" placeholder="optional" />
+      <input type="hidden" id="node-input-headerToType" />
     </div>
     <div class="form-row">
       <label for="node-input-failureMode"><i class="fa fa-random"></i> On rejection</label>
@@ -116,7 +212,7 @@
 
   ### Details
 
-  Only the key-management algorithm bound to the key configuration and the `A256GCM` content encryption are accepted. The `typ` header must equal _Type_ (`JWT` by default) unless _Type_ is blank. _Required_ is a comma-separated list of claims that must be present, `exp` by default.
+  Only the key-management algorithm bound to the key configuration and the `A256GCM` content encryption are accepted. _Type_, _Required_, _Issuer_, _Audience_, _Subject_, _Tolerance_, _Max age_ and _Header to_ work exactly as in `jose-verify`.
 
   _Audience_ lists acceptable recipients, separated by commas. At least one must match the token’s `aud` claim. Blank disables this check; message properties cannot override it.
 
@@ -124,6 +220,8 @@
 
   > [!WARNING]
   > With a shared secret, any holder can create encrypted tokens. Public-key encryption does not authenticate the sender. Verify a signature when issuer authentication is required.
+
+  Subject matching preserves whitespace. Maximum age is a positive whole number of seconds; blank disables it. Output paths must also be separate when message properties share the same object.
 
   ### References
 

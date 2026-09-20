@@ -53,7 +53,7 @@ test("loadMaterial: secret source resolves HMAC algorithms with RFC 7518 minimum
     { family: "signing", source: "secret", alg: "RS256", secretEncoding: "utf8" },
     { secret: "x".repeat(32) },
   );
-  assert.match(rsa.error.message, /only sign with HS256, HS384 or HS512/);
+  assert.match(rsa.error.message, /RS256 cannot be used with this key/);
   const unknownAlg = loadMaterial(
     { family: "signing", source: "secret", alg: "none", secretEncoding: "utf8" },
     { secret: "x".repeat(32) },
@@ -76,14 +76,15 @@ test("loadMaterial: encryption family with a secret means dir/A256GCM with exact
     { family: "encryption", source: "secret", alg: "RSA-OAEP-256", secretEncoding: "hex" },
     { secret: bytes(32).toString("hex") },
   );
-  assert.match(wrongAlg.error.message, /only encrypt with dir/);
+  assert.match(wrongAlg.error.message, /RSA-OAEP-256 cannot be used with this key/);
 });
 
 test("loadMaterial never throws and names the failure category only", () => {
   for (const [config, creds, re] of [
     [{ family: "signing", source: "secret" }, {}, /empty/],
     [{ family: "signing", source: "secret" }, { secret: "YR==" }, /not canonical/],
-    [{ family: "signing", source: "pem" }, { pem: "x" }, /not implemented yet/],
+    [{ family: "signing", source: "pem" }, { pem: "x" }, /could not be parsed/],
+    [{ family: "signing", source: "remote-jwks" }, {}, /not implemented yet/],
     [{ family: "signing", source: "nope" }, {}, /unknown key source/],
     [{ family: "both", source: "secret" }, { secret: "YQ==" }, /unknown key family/],
     [

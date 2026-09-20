@@ -78,6 +78,16 @@
           },
         },
         tokenToType: { value: "msg" },
+        issuer: { value: "" },
+        issuerType: { value: "str" },
+        subject: { value: "" },
+        subjectType: { value: "str" },
+        audience: { value: "" },
+        audienceType: { value: "str" },
+        jti: { value: "" },
+        jtiType: { value: "str" },
+        kid: { value: "" },
+        kidType: { value: "str" },
       },
       label: function () {
         return this.name || "jose sign";
@@ -89,6 +99,19 @@
           types: ["msg", "flow", "global", "json", "jsonata"],
         });
         $("#node-input-tokenTo").typedInput({ default: "msg", typeField: "#node-input-tokenToType", types: ["msg"] });
+        const dynamic = ["str", "msg", "flow", "global", "env"];
+        for (const name of ["issuer", "subject", "kid"])
+          $(`#node-input-${name}`).typedInput({ default: "str", typeField: `#node-input-${name}Type`, types: dynamic });
+        $("#node-input-audience").typedInput({
+          default: "str",
+          typeField: "#node-input-audienceType",
+          types: ["str", "json", "msg", "flow", "global", "env"],
+        });
+        $("#node-input-jti").typedInput({
+          default: "str",
+          typeField: "#node-input-jtiType",
+          types: ["str", { value: "uuid", label: "random UUID", hasValue: false }, "msg", "flow", "global", "env"],
+        });
         const show = () => {
           const exp = $("#node-input-expiryMode").val();
           const nbf = $("#node-input-notBeforeMode").val();
@@ -191,6 +214,31 @@
       <input type="text" id="node-input-typ" placeholder="JWT" style="width: 70%" />
     </div>
     <div class="form-row">
+      <label for="node-input-issuer"><i class="fa fa-building-o"></i> Issuer</label>
+      <input type="text" id="node-input-issuer" placeholder="keep claim iss" />
+      <input type="hidden" id="node-input-issuerType" />
+    </div>
+    <div class="form-row">
+      <label for="node-input-subject"><i class="fa fa-user-o"></i> Subject</label>
+      <input type="text" id="node-input-subject" placeholder="keep claim sub" />
+      <input type="hidden" id="node-input-subjectType" />
+    </div>
+    <div class="form-row">
+      <label for="node-input-audience"><i class="fa fa-users"></i> Audience</label>
+      <input type="text" id="node-input-audience" placeholder="keep claim aud" />
+      <input type="hidden" id="node-input-audienceType" />
+    </div>
+    <div class="form-row">
+      <label for="node-input-jti"><i class="fa fa-hashtag"></i> JWT ID</label>
+      <input type="text" id="node-input-jti" placeholder="keep claim jti" />
+      <input type="hidden" id="node-input-jtiType" />
+    </div>
+    <div class="form-row">
+      <label for="node-input-kid"><i class="fa fa-key"></i> Key ID</label>
+      <input type="text" id="node-input-kid" placeholder="from the key when it has one" />
+      <input type="hidden" id="node-input-kidType" />
+    </div>
+    <div class="form-row">
       <label for="node-input-tokenTo"><i class="fa fa-sign-out"></i> Token to</label>
       <input type="text" id="node-input-tokenTo" />
       <input type="hidden" id="node-input-tokenToType" />
@@ -216,6 +264,8 @@
   ### Details
 
   The key configuration decides the algorithm (`HS256` for a shared secret unless set otherwise); the token header carries `alg` and, unless _Type_ is blank, `typ` (`JWT` by default).
+
+  _Issuer_, _Subject_, _Audience_ and _JWT ID_ set the matching registered claims when filled: a literal, a message, flow, global or environment value, a JSON array for several audiences, or a random UUID for the JWT ID. A blank literal keeps whatever the claims already carry; a dynamic value that is missing or not a string fails with `INVALID_INPUT`. _Key ID_ sets the `kid` header and defaults to the key's own `kid` when the key is a JSON Web Key.
 
   Expiry has four modes. _Expires after_ sets `exp` to now plus a number of seconds (default 3600). _Expires at_ sets an absolute Unix time in seconds. _Keep claim exp_ leaves whatever `exp` the claims already carry. _No expiry_ removes `exp`. _Not before_ works the same way for `nbf` and keeps the incoming claim by default. _Issued at_ sets `iat` to now unless unticked, in which case an incoming `iat` is kept. Active modes override the matching claim in the input; the input object itself is never modified.
 

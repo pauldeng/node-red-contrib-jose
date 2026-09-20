@@ -78,6 +78,16 @@
           },
         },
         tokenToType: { value: "msg" },
+        issuer: { value: "" },
+        issuerType: { value: "str" },
+        subject: { value: "" },
+        subjectType: { value: "str" },
+        audience: { value: "" },
+        audienceType: { value: "str" },
+        jti: { value: "" },
+        jtiType: { value: "str" },
+        kid: { value: "" },
+        kidType: { value: "str" },
       },
       label: function () {
         return this.name || "jose encrypt";
@@ -89,6 +99,19 @@
           types: ["msg", "flow", "global", "json", "jsonata"],
         });
         $("#node-input-tokenTo").typedInput({ default: "msg", typeField: "#node-input-tokenToType", types: ["msg"] });
+        const dynamic = ["str", "msg", "flow", "global", "env"];
+        for (const name of ["issuer", "subject", "kid"])
+          $(`#node-input-${name}`).typedInput({ default: "str", typeField: `#node-input-${name}Type`, types: dynamic });
+        $("#node-input-audience").typedInput({
+          default: "str",
+          typeField: "#node-input-audienceType",
+          types: ["str", "json", "msg", "flow", "global", "env"],
+        });
+        $("#node-input-jti").typedInput({
+          default: "str",
+          typeField: "#node-input-jtiType",
+          types: ["str", { value: "uuid", label: "random UUID", hasValue: false }, "msg", "flow", "global", "env"],
+        });
         const show = () => {
           const exp = $("#node-input-expiryMode").val();
           const nbf = $("#node-input-notBeforeMode").val();
@@ -191,6 +214,31 @@
       <input type="text" id="node-input-typ" placeholder="JWT" style="width: 70%" />
     </div>
     <div class="form-row">
+      <label for="node-input-issuer"><i class="fa fa-building-o"></i> Issuer</label>
+      <input type="text" id="node-input-issuer" placeholder="keep claim iss" />
+      <input type="hidden" id="node-input-issuerType" />
+    </div>
+    <div class="form-row">
+      <label for="node-input-subject"><i class="fa fa-user-o"></i> Subject</label>
+      <input type="text" id="node-input-subject" placeholder="keep claim sub" />
+      <input type="hidden" id="node-input-subjectType" />
+    </div>
+    <div class="form-row">
+      <label for="node-input-audience"><i class="fa fa-users"></i> Audience</label>
+      <input type="text" id="node-input-audience" placeholder="keep claim aud" />
+      <input type="hidden" id="node-input-audienceType" />
+    </div>
+    <div class="form-row">
+      <label for="node-input-jti"><i class="fa fa-hashtag"></i> JWT ID</label>
+      <input type="text" id="node-input-jti" placeholder="keep claim jti" />
+      <input type="hidden" id="node-input-jtiType" />
+    </div>
+    <div class="form-row">
+      <label for="node-input-kid"><i class="fa fa-key"></i> Key ID</label>
+      <input type="text" id="node-input-kid" placeholder="from the key when it has one" />
+      <input type="hidden" id="node-input-kidType" />
+    </div>
+    <div class="form-row">
       <label for="node-input-tokenTo"><i class="fa fa-sign-out"></i> Token to</label>
       <input type="text" id="node-input-tokenTo" />
       <input type="hidden" id="node-input-tokenToType" />
@@ -217,7 +265,7 @@
 
   The key configuration must use the _Encryption_ family. A shared secret of exactly 32 bytes gives direct encryption (`dir`) with `A256GCM`. The token header carries `alg`, `enc` and, unless _Type_ is blank, `typ` (`JWT` by default).
 
-  Expiry, not-before and issued-at work exactly as in `jose-sign`: the active mode sets the claim, _keep_ leaves the incoming claim, _omit_ removes it, and the input object is never modified.
+  _Issuer_, _Subject_, _Audience_, _JWT ID_ and _Key ID_ work exactly as in `jose-sign`. Expiry, not-before and issued-at too: the active mode sets the claim, _keep_ leaves the incoming claim, _omit_ removes it, and the input object is never modified.
 
   Failures are reported through `done(error)`, so a Catch node receives them with `msg.error.code`: `NO_KEY_CONFIG`, `KEY_UNUSABLE`, `INVALID_CLAIMS`, `INVALID_INPUT`, `OUTPUT_INVALID`, `NODE_CLOSING`.
 

@@ -27,14 +27,30 @@
         source: { value: "secret" },
         alg: {
           value: "auto",
-          required: true,
           validate: function (v) {
+            const sourceInput = $("#node-config-input-source");
+            const source = sourceInput.length ? sourceInput.val() : this.source;
+            if (["local-jwks", "remote-jwks"].includes(source)) return true;
             const input = $("#node-config-input-family");
             const family = input.length ? input.val() : this.family === undefined ? "signing" : this.family;
             return Object.hasOwn(ALGS, family) && (v === "auto" || ALGS[family].includes(v));
           },
         },
         secretEncoding: { value: "base64" },
+        algorithms: {
+          value: "",
+          validate: function (v) {
+            const input = $("#node-config-input-source");
+            const source = input.length ? input.val() : this.source === undefined ? "secret" : this.source;
+            if (!["local-jwks", "remote-jwks"].includes(source)) return true;
+            if (typeof v !== "string") return false;
+            const values = v
+              .split(",")
+              .map((part) => part.trim())
+              .filter(Boolean);
+            return values.length > 0 && values.every((alg) => ALGS.signing.includes(alg) && !alg.startsWith("HS"));
+          },
+        },
       },
       credentials: {
         secret: { type: "password" },
@@ -111,7 +127,7 @@
         <option value="remote-jwks">JSON Web Key Set (URL)</option>
       </select>
     </div>
-    <div class="form-row">
+    <div class="form-row" data-source="secret pem jwk">
       <label for="node-config-input-alg"><i class="fa fa-cog"></i> Algorithm</label>
       <select id="node-config-input-alg"></select>
     </div>
@@ -127,6 +143,10 @@
         <option value="hex">hex</option>
         <option value="utf8">utf8 text</option>
       </select>
+    </div>
+    <div class="form-row" data-source="local-jwks remote-jwks">
+      <label for="node-config-input-algorithms"><i class="fa fa-cog"></i> Algorithms</label>
+      <input type="text" id="node-config-input-algorithms" placeholder="RS256, ES256" />
     </div>
     <div class="form-row" data-source="pem">
       <label for="node-config-input-pem"><i class="fa fa-file-text-o"></i> PEM</label>
@@ -157,10 +177,16 @@
 
   A shared secret is decoded strictly with the selected encoding (`base64` by default, as produced by `openssl rand -base64 32`). It must be at least 32 bytes for `HS256`, 48 for `HS384`, 64 for `HS512`, and exactly 32 bytes for encryption. Length is checked, randomness is up to you.
 
+  A PEM key may be a private key (PKCS#8, PKCS#1 or SEC1, optionally encrypted with the _Passphrase_), a public key (SPKI or PKCS#1) or an X.509 certificate, whose public key is extracted without any chain validation. A private key serves both directions of its family; a public key or certificate can only verify or encrypt. RSA keys need at least 2048 bits; supported curves are P-256, P-384, P-521, Ed25519 (signing) and X25519 (encryption). `auto` picks `RS256`, `ES256`/`ES384`/`ES512`, `Ed25519`, `RSA-OAEP-256` or `ECDH-ES+A256KW` from the key type.
+
+  A JSON Web Key retains its metadata when passed to jose, so its `alg`, `use` and `key_ops` members are enforced: a declared `alg` becomes the bound algorithm, `use` must match the family, and a private key whose `key_ops` exclude the public operation cannot verify or encrypt. Private and public copies narrow `key_ops` to their respective operations without adding permissions. For RSA-OAEP, encryption requires both `encrypt` and `wrapKey`, and decryption both `decrypt` and `unwrapKey`, when `key_ops` is present. For ECDH, `deriveBits` permits deriving a public copy with no WebCrypto usages. An `oct` key follows the shared-secret rules; for encryption its `alg` names the content encryption `A256GCM`.
+
+  A pasted JSON Web Key Set verifies signatures only. Members must be public asymmetric keys, at most 100, and _Algorithms_ must list the accepted JWS algorithms; with more than one algorithm every member must declare its own `alg`. The token `kid` selects the key.
+
   When the material cannot be used, the configuration logs a warning at deploy time, dependent nodes show `key error`, and every message they receive fails with `KEY_UNUSABLE`.
 
   > [!NOTE]
-  > PEM, JSON Web Key and JSON Web Key Set sources are not implemented yet; only shared secrets work.
+  > The remote JSON Web Key Set URL source is not implemented yet.
 
   ### References
 

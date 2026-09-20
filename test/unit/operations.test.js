@@ -215,3 +215,183 @@ for (const type of Object.keys(FAMILY)) {
     );
   }
 }
+
+const jose = require("jose");
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+for (const type of PRODUCERS)
+  test(`${type}: claim setters from literals, message values, JSON arrays and random UUIDs`, async () => {
+    const { handlers } = operation(type, {
+      issuer: "issuer-x",
+      subject: "who",
+      subjectType: "msg",
+      audience: '["a", "b"]',
+      audienceType: "json",
+      jti: "",
+      jtiType: "uuid",
+      kid: "k-1",
+    });
+    const sent = [];
+    const done = [];
+    await handlers.input(
+      { payload: { role: "r", iss: "old" }, who: "alice" },
+      (m) => sent.push(m),
+      (e) => done.push(e),
+    );
+    assert.deepEqual(done, [undefined]);
+    const token = sent[0].payload;
+    assert.equal(jose.decodeProtectedHeader(token).kid, "k-1");
+    const state = states[FAMILY[type]];
+    const { payload } =
+      type === "sign"
+        ? await jose.jwtVerify(token, keyFor(state, "verify"), { algorithms: [state.alg] })
+        : await jose.jwtDecrypt(token, keyFor(state, "decrypt"));
+    assert.equal(payload.iss, "issuer-x", "setter overrides the incoming claim");
+    assert.equal(payload.sub, "alice");
+    assert.deepEqual(payload.aud, ["a", "b"]);
+    assert.match(payload.jti, UUID);
+    assert.equal(payload.role, "r");
+  });
+
+for (const type of PRODUCERS)
+  test(`${type}: blank literals keep incoming claims; missing or non-string dynamic values fail`, async () => {
+    let { handlers } = operation(type, { issuer: "", subject: "   ", expiryMode: "preserve", issuedAt: false });
+    const sent = [];
+    const state = states[FAMILY[type]];
+    await handlers.input(
+      { payload: { iss: "keep", sub: "s", exp: 4102444800 } },
+      (m) => sent.push(m),
+      () => {},
+    );
+    const { payload } =
+      type === "sign"
+        ? await jose.jwtVerify(sent[0].payload, keyFor(state, "verify"), { algorithms: [state.alg] })
+        : await jose.jwtDecrypt(sent[0].payload, keyFor(state, "decrypt"));
+    assert.deepEqual(payload, { iss: "keep", sub: "s", exp: 4102444800 });
+    for (const config of [
+      { issuer: "missing", issuerType: "msg" },
+      { audience: "[]", audienceType: "json" },
+      { audience: "[1]", audienceType: "json" },
+      { subject: "num", subjectType: "msg" },
+      { issuer: "x", issuerType: "jsonata" },
+      { jti: null },
+    ]) {
+      ({ handlers } = operation(type, config));
+      const done = [];
+      await handlers.input(
+        { payload: {}, num: 5 },
+        () => assert.fail("sent"),
+        (e) => done.push(e),
+      );
+      assert.equal(done[0]?.code, "INVALID_INPUT", JSON.stringify(config));
+    }
+  });
+
+for (const type of ["verify", "decrypt"])
+  test(`${type}: headerTo receives the protected header and must not nest with claimsTo`, async () => {
+    const state = states[FAMILY[type]];
+    const claims = { sub: "h" };
+    const token =
+      type === "verify"
+        ? await new jose.SignJWT(claims)
+            .setProtectedHeader({ alg: state.alg, typ: "JWT", kid: "kk" })
+            .setExpirationTime("1h")
+            .sign(keyFor(state, "sign"))
+        : await new jose.EncryptJWT(claims)
+            .setProtectedHeader({ alg: state.alg, enc: state.enc, typ: "JWT", kid: "kk" })
+            .setExpirationTime("1h")
+            .encrypt(keyFor(state, "encrypt"));
+    let { handlers } = operation(type, { headerTo: "header" });
+    const sent = [];
+    await handlers.input(
+      { payload: token },
+      (m) => sent.push(m),
+      () => {},
+    );
+    assert.equal(sent[0][0].header.kid, "kk");
+    assert.equal(sent[0][0].header.alg, state.alg);
+    assert.equal(sent[0][0].payload.sub, "h");
+    ({ handlers } = operation(type, { claimsTo: "payload", headerTo: "payload.header" }));
+    const done = [];
+    await handlers.input(
+      { payload: token },
+      () => assert.fail("sent"),
+      (e) => done.push(e),
+    );
+    assert.equal(done[0]?.code, "INVALID_INPUT");
+  });
+
+for (const type of ["verify", "decrypt"]) {
+  test(`${type}: aliased output paths fail before attaching validated claims`, async () => {
+    const state = states[FAMILY[type]];
+    const builder =
+      type === "verify"
+        ? new jose.SignJWT({ sub: "PRIVATE_ALIAS_CLAIMS" })
+        : new jose.EncryptJWT({ sub: "PRIVATE_ALIAS_CLAIMS" });
+    builder
+      .setProtectedHeader({ alg: state.alg, typ: "JWT", ...(state.enc ? { enc: state.enc } : {}) })
+      .setExpirationTime("1h");
+    const token =
+      type === "verify" ? await builder.sign(keyFor(state, "sign")) : await builder.encrypt(keyFor(state, "encrypt"));
+    const shared = {};
+    const msg = { payload: token, a: shared, b: shared };
+    const { handlers } = operation(type, { claimsTo: "a.result", headerTo: "b.result.sub.header" });
+    const done = [];
+    await handlers.input(
+      msg,
+      () => assert.fail("sent"),
+      (e) => done.push(e),
+    );
+    assert.equal(done[0]?.code, "OUTPUT_INVALID");
+    assert.deepEqual(shared, {}, "no decoded claims remain after output failure");
+    assert.equal(msg.payload, token);
+  });
+}
+
+for (const type of PRODUCERS) {
+  test(`${type}: UUID mode works without a stored value`, async () => {
+    const { handlers } = operation(type, { jtiType: "uuid" });
+    const msg = { payload: {} };
+    const done = [];
+    await handlers.input(
+      msg,
+      () => {},
+      (e) => done.push(e),
+    );
+    assert.deepEqual(done, [undefined]);
+    const state = states[FAMILY[type]];
+    const result =
+      type === "sign"
+        ? await jose.jwtVerify(msg.payload, keyFor(state, "verify"))
+        : await jose.jwtDecrypt(msg.payload, keyFor(state, "decrypt"));
+    assert.match(result.payload.jti, UUID);
+  });
+}
+
+for (const type of PRODUCERS) {
+  test(`${type}: overwritten unserialisable claims do not hide a key permission failure`, async () => {
+    const family = FAMILY[type];
+    const state = loadMaterial(
+      { source: "jwk", family },
+      {
+        jwk: JSON.stringify({
+          kty: "oct",
+          k: crypto.randomBytes(32).toString("base64url"),
+          key_ops: [type === "sign" ? "verify" : "decrypt"],
+        }),
+      },
+    );
+    const { handlers } = operation(type, { issuer: "replacement" }, undefined, {
+      type: "jose-key",
+      state,
+      keyFor: (p) => keyFor(state, p),
+    });
+    const done = [];
+    await handlers.input(
+      { payload: { iss: 1n } },
+      () => assert.fail("sent"),
+      (e) => done.push(e),
+    );
+    assert.equal(done[0]?.code, "INVALID_INPUT", "the effective claims serialize; jose rejected key permissions");
+  });
+}

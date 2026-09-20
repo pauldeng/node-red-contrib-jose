@@ -104,6 +104,31 @@ test("consumeOptions: typ and requiredClaims defaults and clearing", () => {
   assert.throws(() => consumeOptions({ requiredClaims: ["exp"] }), invalid(/requiredClaims/));
 });
 
+test("consumeOptions: issuer, subject, clockTolerance and maxTokenAge", () => {
+  assert.deepEqual(consumeOptions({ issuer: " a , b ", subject: " me ", clockTolerance: "30", maxTokenAge: 600 }), {
+    typ: "JWT",
+    requiredClaims: ["exp"],
+    issuer: ["a", "b"],
+    subject: " me ",
+    clockTolerance: 30,
+    maxTokenAge: 600,
+  });
+  assert.equal(consumeOptions({ issuer: "one" }).issuer, "one");
+  const blank = consumeOptions({ issuer: "", subject: "", clockTolerance: "", maxTokenAge: "" });
+  assert.deepEqual(Object.keys(blank).sort(), ["requiredClaims", "typ"]);
+  for (const [config, re] of [
+    [{ issuer: null }, /issuer/],
+    [{ issuer: " , " }, /issuer must contain/],
+    [{ subject: 5 }, /subject/],
+    [{ clockTolerance: 301 }, /clockTolerance/],
+    [{ clockTolerance: -1 }, /clockTolerance/],
+    [{ clockTolerance: null }, /clockTolerance/],
+    [{ maxTokenAge: 0 }, /maxTokenAge/],
+    [{ maxTokenAge: "x" }, /maxTokenAge/],
+  ])
+    assert.throws(() => consumeOptions(config), invalid(re), JSON.stringify(config));
+});
+
 test("paths: identifier segments only, no __proto__, disjoint", () => {
   assert.deepEqual(parsePath("payload.token", "tokenTo"), ["payload", "token"]);
   for (const bad of ["", "payload.", ".x", "payload[0]", "a b", "payload.__proto__.x", 5, undefined])
@@ -206,4 +231,9 @@ test("audience policy is static, optional, comma-separated and rejects invalid t
   for (const audience of [null, [], {}, false, 0, ", ,"]) {
     assert.throws(() => consumeOptions({ audience }), { code: "INVALID_INPUT" });
   }
+});
+
+test("consumer policy preserves exact subjects and permits the documented max-age range", () => {
+  assert.equal(consumeOptions({ subject: " alice " }).subject, " alice ");
+  assert.equal(consumeOptions({ maxTokenAge: 31536001 }).maxTokenAge, 31536001);
 });

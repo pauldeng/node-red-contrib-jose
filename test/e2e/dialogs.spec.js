@@ -114,6 +114,9 @@ for (const theme of E.THEMES) {
     await page.selectOption("#node-input-expiryMode", "absolute");
     await expect(page.locator("#node-input-ttlSeconds")).toBeHidden();
     await page.fill("#node-input-expiresAt", "1700000000");
+    // TypedInput widgets are driven through their API; page.fill cannot reach the wrapped input.
+    await page.evaluate(() => window.$("#node-input-issuer").typedInput("value", "https://issuer.example"));
+    await page.evaluate(() => window.$("#node-input-jti").typedInput("type", "uuid"));
     await page.fill("#node-input-name", "edited");
     await expect(page.locator(".red-ui-tray-content .input-error")).toHaveCount(0);
     await E.closeDialog(page);
@@ -122,6 +125,10 @@ for (const theme of E.THEMES) {
     await expect(page.locator("#node-input-expiryMode")).toHaveValue("absolute");
     await expect(page.locator("#node-input-expiresAt")).toHaveValue("1700000000");
     await expect(page.locator("#node-input-ttlSeconds")).toHaveValue("3600", "hidden value is kept");
+    expect(await page.evaluate(() => window.$("#node-input-issuer").typedInput("value"))).toBe(
+      "https://issuer.example",
+    );
+    expect(await page.evaluate(() => window.$("#node-input-jti").typedInput("type"))).toBe("uuid");
     await E.closeDialog(page, { save: false });
   });
 
@@ -143,12 +150,22 @@ for (const theme of E.THEMES) {
     await page.selectOption("#node-input-failureMode", "output");
     await page.uncheck("#node-input-stripBearer");
     await page.fill("#node-input-requiredClaims", "exp, sub");
+    await page.fill("#node-input-clockTolerance", "30");
+    await page.evaluate(() => window.$("#node-input-headerTo").typedInput("value", "header"));
     await page.fill("#node-input-audience", "api, worker");
     await E.closeDialog(page);
     await E.openNode(page, "verify1");
     await expect(page.locator("#node-input-failureMode")).toHaveValue("output");
     await expect(page.locator("#node-input-stripBearer")).not.toBeChecked();
     await expect(page.locator("#node-input-requiredClaims")).toHaveValue("exp, sub");
+    await expect(page.locator("#node-input-clockTolerance")).toHaveValue("30");
+    expect(await page.evaluate(() => window.$("#node-input-headerTo").typedInput("value"))).toBe("header");
+    await page.evaluate(() => window.$("#node-input-headerTo").typedInput("value", "payload.header"));
+    const nestedInvalid = await page.evaluate(() => {
+      const input = window.$("#node-input-headerTo");
+      return input.hasClass("input-error") || input.closest(".red-ui-typedInput-container").hasClass("input-error");
+    });
+    expect(nestedInvalid, "a header path nested inside claimsTo is flagged").toBe(true);
     await expect(page.locator("#node-input-audience")).toHaveValue("api, worker");
     await E.closeDialog(page, { save: false });
   });
@@ -225,6 +242,11 @@ for (const theme of E.THEMES) {
     await page.selectOption("#node-config-input-source", "pem");
     await expect(page.locator("#node-config-input-secretEncoding")).toBeHidden();
     await expect(page.locator("#node-config-input-pem")).toBeVisible();
+    await expect(page.locator("#node-config-input-alg")).toBeVisible();
+    await page.selectOption("#node-config-input-source", "local-jwks");
+    await expect(page.locator("#node-config-input-alg")).toBeHidden();
+    await expect(page.locator("#node-config-input-algorithms")).toBeVisible();
+    await expect(page.locator("#node-config-input-jwk")).toBeVisible();
     await E.assertNoOverflow(page);
     await page.screenshot({ path: `test/e2e/screenshots/jose-key-${theme}.png` });
     await E.closeDialog(page, { save: false, config: true });
@@ -270,4 +292,39 @@ test("output path validators reject exact prototype segments and allow similar n
     }
     await E.closeDialog(page, { save: false });
   }
+});
+
+test("M3 validators reject malformed imports without throwing and honor inactive fields", async ({ page, nr }) => {
+  await nr.deploy(flow);
+  await E.gotoEditor(page, nr);
+  const result = await page.evaluate(() => {
+    const results = [];
+    for (const id of ["verify1", "decrypt1"]) {
+      const node = RED.nodes.node(id);
+      for (const [field, value, extra, expected] of [
+        ["headerTo", "header", { claimsTo: 42 }, false],
+        ["issuer", ", ,", {}, false],
+        ["clockTolerance", null, {}, false],
+        ["clockTolerance", true, {}, false],
+        ["maxTokenAge", 31536001, {}, true],
+      ]) {
+        let actual;
+        try {
+          actual = node._def.defaults[field].validate?.call({ ...node, ...extra }, value) ?? true;
+        } catch {
+          actual = "threw";
+        }
+        results.push({ id, field, actual, expected });
+      }
+    }
+    const key = RED.nodes.node("key1");
+    results.push({
+      id: "key1",
+      field: "alg",
+      actual: key._def.defaults.alg.validate.call({ ...key, source: "local-jwks" }, "invalid-inactive"),
+      expected: true,
+    });
+    return results;
+  });
+  for (const row of result) expect(row.actual, `${row.id} ${row.field}`).toBe(row.expected);
 });

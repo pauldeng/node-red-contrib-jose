@@ -6,6 +6,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { startNodeRed } = require("../helpers/node-red");
+const { pem } = require("../helpers/keys");
 
 const PKG = path.resolve(__dirname, "../..");
 const pkg = require(path.join(PKG, "package.json"));
@@ -32,6 +33,17 @@ const SCENARIOS = {
       assert.equal(msg.payload.sub, "alice");
       assert.equal(msg.payload.role, "admin");
       assert.equal(msg.payload.exp - msg.payload.iat, 3600);
+    },
+  },
+  "03-rs256-pem-key.json": {
+    inject: "jose_ex3_inject",
+    debug: "jose_ex3_claims",
+    check: (msg) => {
+      assert.equal(msg.payload.sub, "alice");
+      assert.equal(msg.payload.iss, "https://issuer.example");
+      assert.equal(msg.payload.aud, "example-api");
+      assert.match(msg.payload.jti, /^[0-9a-f-]{36}$/);
+      assert.deepEqual(msg.header, { alg: "RS256", typ: "JWT", kid: "demo-2026" });
     },
   },
   "02-encrypt-and-decrypt.json": {
@@ -63,9 +75,12 @@ for (const f of files)
     t.after(() => nr.stop());
     const flow = JSON.parse(fs.readFileSync(path.join(PKG, "examples", f), "utf8"));
     for (const n of flow)
-      if (n.type === "jose-key") n.credentials = { secret: crypto.randomBytes(32).toString("base64") };
+      if (n.type === "jose-key")
+        n.credentials =
+          n.source === "pem" ? { pem: pem.pkcs8("rsa") } : { secret: crypto.randomBytes(32).toString("base64") };
     await nr.deploy(flow);
     const { inject, debug, check } = SCENARIOS[f];
     const [msg] = await Promise.all([nr.waitForDebug((d) => d.id === debug), nr.inject(inject)]);
-    check(msg.msg !== undefined && msg.format === undefined ? msg : { payload: msg.msg });
+    const debugNode = flow.find((n) => n.id === debug);
+    check(debugNode.complete === "true" ? msg.msg : { payload: msg.msg });
   });

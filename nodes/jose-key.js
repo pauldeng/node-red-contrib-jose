@@ -9,7 +9,13 @@ module.exports = function (RED) {
     const node = this;
     // Parsed once, synchronously. Consumers call keyFor per message and never cache the result.
     node.state = loadMaterial(
-      { family: config.family, source: config.source, alg: config.alg, secretEncoding: config.secretEncoding },
+      {
+        family: config.family,
+        source: config.source,
+        alg: config.alg,
+        algorithms: config.algorithms,
+        secretEncoding: config.secretEncoding,
+      },
       node.credentials ?? {},
     );
     if (!node.state.ok) node.warn(node.state.error.message); // package-owned category text, once per deploy

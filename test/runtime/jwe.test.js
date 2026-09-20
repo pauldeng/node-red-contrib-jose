@@ -269,7 +269,7 @@ test("family mismatch and wrong secret sizes are KEY_UNUSABLE", async () => {
   id = ids();
   msg = await run(id, decryptOnly(id, await jwe(), {}, { alg: "RSA-OAEP-256" }), id.caught);
   assert.equal(msg.error.code, "KEY_UNUSABLE");
-  assert.match(msg.error.message, /only encrypt with dir/);
+  assert.match(msg.error.message, /RSA-OAEP-256 cannot be used with this key/);
 });
 
 test("Function-node claims and output containers work in encrypt/decrypt flows", async () => {
