@@ -59,7 +59,7 @@ The same files import through **Settings → Rules → Rulesets → Import a rul
 
 ## Verify the registry result
 
-Run `npm view @pauldeng/node-red-contrib-jose@<version> dist --json`. Confirm the version, compare `dist.integrity` against the locally retained tarball for the manual bootstrap, and check provenance attestations for later CI publications. Install that exact registry version into a fresh Node-RED 5 user directory and round-trip example 01 with a newly generated secret. A workflow success message alone is insufficient. Submit the package to the Node-RED Flow Library after registry verification.
+Run `npm view @pauldeng/node-red-contrib-jose@<version> dist --json`. Confirm the version, compare `dist.integrity` against the locally retained tarball for the manual bootstrap, and check provenance attestations for later CI publications. Install that exact registry version into a fresh Node-RED 5 user directory and round-trip example 01 with a newly generated secret. A workflow success message alone is insufficient. Submit the package to the Node-RED Flow Library after registry verification. Then publish the GitHub release for the verified tag with the changelog entry as its notes, for example `gh release create v<version> --verify-tag --latest --title v<version> --notes-file <notes>`; the release page documents the version, publication already happened in the workflow.
 
 If a published version is wrong, fix it in a new version; do not retag or overwrite it.
 
