@@ -124,3 +124,21 @@ test("release requires an explicit version tag, public repository and token-free
     assert.throws(() => runGuard(ref));
   assert.throws(() => runGuard(`refs/tags/v${pkg.version}`, "true"));
 });
+
+test("the main branch ruleset requires exactly the CI jobs", () => {
+  const ci = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8").replace(/(^|\s)#.*$/gm, "");
+  const versions = [...ci.match(/matrix:\s*\{\s*node:\s*\[([^\]]+)\]/)[1].matchAll(/["']([^"']+)["']/g)].map(
+    (m) => m[1],
+  );
+  const expected = [...ci.matchAll(/^ {4}name: (.+)$/gm)].flatMap(([, name]) =>
+    name.includes("${{ matrix.node }}") ? versions.map((v) => name.replace("${{ matrix.node }}", v)) : [name],
+  );
+  const ruleset = JSON.parse(fs.readFileSync(path.join(ROOT, ".github/rulesets/main.json"), "utf8"));
+  assert.deepEqual(ruleset.bypass_actors, [], "nobody bypasses main protection");
+  const checks = ruleset.rules.find((r) => r.type === "required_status_checks").parameters.required_status_checks;
+  assert.deepEqual(checks.map((c) => c.context).sort(), expected.sort(), "ruleset checks must match CI job names");
+  assert.ok(
+    ruleset.rules.some((r) => r.type === "pull_request"),
+    "main accepts pull requests only",
+  );
+});

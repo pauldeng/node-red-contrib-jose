@@ -38,7 +38,24 @@ After the package exists, configure its npm trusted publisher with this exact tu
 
 Create the GitHub `release` environment with a required maintainer reviewer and restrict deployment to release tags. Require 2FA and disallow traditional publishing tokens in npm settings after trusted publishing is configured. The workflow uses OIDC and npm 11.19.0 (trusted publishing requires npm >=11.5.1); it needs no npm token secret.
 
-For each subsequent release, update the version and lockfile, add the dated changelog entry, complete the same checks and scan the changes. Push the verified `v<version>` tag. Trigger the **Release** workflow manually on that tag, for example `gh workflow run release.yml --ref v0.1.1`, then approve its environment deployment. Branch runs and tag/version mismatches fail before publication. The workflow reruns deterministic checks, audit and a clean tarball installation; editor tests remain in CI, which must already be green for the tagged commit. Merely pushing a tag or creating a GitHub release does not publish.
+For each subsequent release, open a pull request from a branch that updates the version and lockfile and adds the dated changelog entry; complete the same checks and scan the changes there. Merge it once CI is green, then create and push the `v<version>` tag on the resulting `main` commit. Trigger the **Release** workflow manually on that tag, for example `gh workflow run release.yml --ref v0.1.1`, then approve its environment deployment. Branch runs and tag/version mismatches fail before publication. The workflow reruns deterministic checks, audit and a clean tarball installation; editor tests remain in CI, which must already be green for the tagged commit. Merely pushing a tag or creating a GitHub release does not publish.
+
+## Protected `main` and release tags
+
+Two repository rulesets, kept in `.github/rulesets/`, enforce the release path with no bypass actors, the owner included:
+
+- `main.json`: `main` changes only through pull requests whose review threads are resolved and whose latest commit passes all four CI checks (unit, contracts and runtime on Node 24.0, 24 and 26, plus the editor job). Direct pushes, force pushes and deletion are blocked. No approving review is required, so a single maintainer can merge their own pull request.
+- `release-tags.json`: tags matching `v*` cannot be moved, updated or deleted once pushed.
+
+GitHub enforces rulesets only on public repositories or paid plans; the public-repository requirement above covers this. Recreate them with:
+
+```sh
+gh api -X POST repos/pauldeng/node-red-contrib-jose/rulesets --input .github/rulesets/main.json
+gh api -X POST repos/pauldeng/node-red-contrib-jose/rulesets --input .github/rulesets/release-tags.json
+gh api repos/pauldeng/node-red-contrib-jose/rules/branches/main --jq '.[].type'
+```
+
+The same files import through **Settings → Rules → Rulesets → Import a ruleset**. The package contract test keeps the required checks in `main.json` equal to the CI job names, so a renamed job cannot leave pull requests waiting for a check that never reports.
 
 ## Verify the registry result
 

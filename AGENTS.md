@@ -19,4 +19,4 @@ Design, contracts and milestones live in `PLAN.md` and `planning/` (untracked, n
 - `async`/`await` only; no `.then` chains or `new Promise` in runtime or test code.
 - Secrets only in credentials; never in `defaults`, examples, logs or tests committed to git.
 - Each input settles exactly once via `done()`; errors are new sanitized `Error`s with an allowlisted `code`.
-- Commit only when the maintainer asks. Never publish.
+- Commit only when the maintainer asks. `main` is protected: every change, including release version bumps, lands through a pull request with green CI. Never publish.
