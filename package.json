@@ -1,0 +1,69 @@
+{
+  "name": "@pauldeng/node-red-contrib-jose",
+  "version": "0.1.0",
+  "description": "Node-RED nodes to sign, verify, encrypt and decrypt JSON Web Tokens with jose (JWS, JWE, JWK, JWKS)",
+  "license": "MIT",
+  "author": "Paul Deng",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pauldeng/node-red-contrib-jose.git"
+  },
+  "bugs": {
+    "url": "https://github.com/pauldeng/node-red-contrib-jose/issues"
+  },
+  "homepage": "https://github.com/pauldeng/node-red-contrib-jose#readme",
+  "keywords": [
+    "node-red",
+    "jose",
+    "jwt",
+    "jws",
+    "jwe",
+    "jwk",
+    "jwks",
+    "json web token"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "node-red": {
+    "version": ">=5.0.0",
+    "nodes": {
+      "jose-key": "nodes/jose-key.js"
+    }
+  },
+  "files": [
+    "nodes/",
+    "lib/",
+    "examples/",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "npm run check && node --test --test-concurrency=1 \"test/**/*.test.js\"",
+    "test:runtime": "node --test --test-concurrency=1 \"test/runtime/*.test.js\"",
+    "test:e2e": "playwright test",
+    "check": "node scripts/check-package.mjs && node scripts/check-editor-contract.mjs && node scripts/check-async-style.mjs nodes test",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check:release": "node scripts/check-package.mjs --release"
+  },
+  "dependencies": {
+    "jose": "6.2.12"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.63.0",
+    "eslint": "10.11.0",
+    "globals": "17.12.0",
+    "node-red": "5.0.7",
+    "prettier": "3.9.8"
+  },
+  "overrides": {
+    "express@4.22.2": "4.22.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -1,0 +1,5 @@
+PLAN.md
+planning/
+package-lock.json
+test-results/
+test/e2e/screenshots/

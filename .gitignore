@@ -1,0 +1,13 @@
+node_modules/
+*.tgz
+test-results/
+playwright-report/
+coverage/
+test/e2e/screenshots/
+*.log
+.env
+.claude/
+.codex/
+# planning documents are kept out of git and out of the package
+PLAN.md
+planning/

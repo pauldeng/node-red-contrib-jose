@@ -1,0 +1,97 @@
+<script type="text/javascript">
+  RED.nodes.registerType("jose-key", {
+    category: "config",
+    defaults: {
+      name: { value: "" },
+      family: { value: "signing" },
+      source: { value: "secret" },
+    },
+    credentials: {
+      secret: { type: "password" },
+      pem: { type: "password" },
+      passphrase: { type: "password" },
+      jwk: { type: "password" },
+    },
+    label: function () {
+      return this.name || `jose key (${this.source})`;
+    },
+    oneditprepare: function () {
+      // One handler shows only the rows that belong to the selected source; typed values in hidden rows are kept.
+      const show = () => {
+        const source = $("#node-config-input-source").val();
+        $(".jose-dialog [data-source]").each(function () {
+          $(this).toggle($(this).attr("data-source").split(" ").includes(source));
+        });
+      };
+      $("#node-config-input-source").on("change", show);
+      show();
+    },
+  });
+</script>
+
+<script type="text/html" data-template-name="jose-key">
+  <style>
+    .jose-dialog textarea {
+      width: 70%;
+      font-family: monospace;
+      resize: vertical;
+    }
+  </style>
+  <div class="jose-dialog">
+    <div class="form-row">
+      <label for="node-config-input-name"><i class="fa fa-tag"></i> Name</label>
+      <input type="text" id="node-config-input-name" placeholder="Name" />
+    </div>
+    <div class="form-row">
+      <label for="node-config-input-family"><i class="fa fa-key"></i> Use for</label>
+      <select id="node-config-input-family">
+        <option value="signing">Signing (JWS)</option>
+        <option value="encryption">Encryption (JWE)</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label for="node-config-input-source"><i class="fa fa-folder-open-o"></i> Source</label>
+      <select id="node-config-input-source">
+        <option value="secret">Shared secret</option>
+        <option value="pem">PEM key or certificate</option>
+        <option value="jwk">JSON Web Key</option>
+        <option value="local-jwks">JSON Web Key Set (pasted)</option>
+        <option value="remote-jwks">JSON Web Key Set (URL)</option>
+      </select>
+    </div>
+    <div class="form-row" data-source="secret">
+      <label for="node-config-input-secret"><i class="fa fa-lock"></i> Secret</label>
+      <input type="password" id="node-config-input-secret" autocomplete="new-password" />
+    </div>
+    <div class="form-row" data-source="pem">
+      <label for="node-config-input-pem"><i class="fa fa-file-text-o"></i> PEM</label>
+      <textarea id="node-config-input-pem" rows="8" autocomplete="off" spellcheck="false"></textarea>
+    </div>
+    <div class="form-row" data-source="pem">
+      <label for="node-config-input-passphrase"><i class="fa fa-lock"></i> Passphrase</label>
+      <input type="password" id="node-config-input-passphrase" autocomplete="new-password" />
+    </div>
+    <div class="form-row" data-source="jwk local-jwks">
+      <label for="node-config-input-jwk"><i class="fa fa-file-code-o"></i> JWK</label>
+      <textarea id="node-config-input-jwk" rows="8" autocomplete="off" spellcheck="false"></textarea>
+    </div>
+  </div>
+</script>
+
+<script type="text/markdown" data-help-name="jose-key">
+  Holds one key for the jose nodes: a shared secret, a PEM key or certificate, a JSON Web Key, or a JSON Web Key Set, used either for signing or for encryption.
+
+  ### Details
+
+  Key material is stored in Node-RED credentials, never in the exported flow. Once saved, the editor shows a placeholder instead of the stored value; paste new material to replace it. A credential may also be a whole-value environment reference such as `${JWT_SECRET}`.
+
+  Each key configuration is used for exactly one family, signing or encryption, and binds one algorithm. The operation nodes inherit that algorithm; a token header can never choose it.
+
+  > [!NOTE]
+  > Pre-release skeleton: key material is not parsed yet.
+
+  ### References
+
+  - [RFC 7517 JSON Web Key](https://www.rfc-editor.org/rfc/rfc7517) - JWK and JWK Set formats
+  - [RFC 8725 JWT Best Current Practices](https://www.rfc-editor.org/rfc/rfc8725) - algorithm and key policy
+</script>

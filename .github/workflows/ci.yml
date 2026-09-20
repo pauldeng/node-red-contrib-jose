@@ -1,0 +1,38 @@
+name: CI
+on:
+  pull_request:
+  push: { branches: [main] }
+  schedule: [{ cron: "17 6 * * 1" }] # weekly: new advisories surface without a PR
+permissions: { contents: read }
+concurrency: { group: "ci-${{ github.ref }}", cancel-in-progress: true }
+jobs:
+  fast:
+    name: unit, contracts, runtime (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy: { fail-fast: false, matrix: { node: ["24.0", "24", "26"] } } # Contract requires the floor line, not just the floating major.
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with: { node-version: "${{ matrix.node }}", cache: npm }
+      - run: npm ci
+      - run: npm run lint && npm run format:check
+      - run: npm test # unit, package contracts, and runtime; each runs once
+        timeout-minutes: 6
+      - run: npm audit --omit=dev
+      - run: npm pack --dry-run
+  heavy:
+    name: editor (Node 24)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with: { node-version: "24", cache: npm }
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+        timeout-minutes: 6
+      - if: failure()
+        uses: actions/upload-artifact@v6
+        with: { name: traces, path: test-results/, if-no-files-found: ignore, retention-days: 7 }
